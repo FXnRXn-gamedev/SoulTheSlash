@@ -82,8 +82,11 @@ protected:
 #pragma endregion
 
 #pragma region Component/Refference
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "---Slash---|Stat")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "---Slash---|Component")
 	class UPlayerStatComponent* StatComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "---Slash---|Component")
+	class UStateComponent* StateComponent;
 	
 	UPROPERTY(EditDefaultsOnly, Category = "---Slash---|UI")
 	TSubclassOf<USlashPlayerStatWidget> PlayerStatWidgetClass;

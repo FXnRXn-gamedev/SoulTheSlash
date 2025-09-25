@@ -14,6 +14,7 @@
 #include "Widgets/SlashPlayerHUDWidget.h"
 #include "Widgets/SlashPlayerStatWidget.h"
 #include "DrawDebugHelpers.h"
+#include "Component/StateComponent.h"
 
 #pragma region Unreal Engine Callbacks
 
@@ -27,6 +28,9 @@ ASlashPlayerCharacter::ASlashPlayerCharacter()
 
 	// Create combat component
 	StatComponent = CreateDefaultSubobject<UPlayerStatComponent>(TEXT("StatComponent"));
+
+	// Create state component
+	StateComponent = CreateDefaultSubobject<UStateComponent>(TEXT("StateComponent"));
 	
 	// Create camera boom
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
