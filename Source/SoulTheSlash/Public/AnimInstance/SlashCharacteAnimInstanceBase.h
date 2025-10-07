@@ -89,7 +89,9 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
 	float TimeOfFalling;
-	
+
+	UPROPERTY(BlueprintReadWrite, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
+	float UpperbodyDynamicAdditiveWeight;
 
 	UPROPERTY()
 	class ASlashPlayerCharacter* OwnerCharacter;
@@ -111,6 +113,7 @@ private:
 	void UpdateCharacterMovementData();
 	void UpdateJumpFallData();
 	void UpdateJumpFallRecoveryDataThreadSafe(float DeltaSeconds);
+	void UpdateBlendWeightDataThreadSafe(float DeltaSeconds);
 
 	EAnimCardinalDirection SelectCardinalDirectionFromAngle(float Angle);
 	float ABSAngle;

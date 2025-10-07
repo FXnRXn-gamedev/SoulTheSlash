@@ -71,6 +71,8 @@ Saved/*
 Intermediate/*
 Plugins/**/Intermediate/*
 
+Source/SoulTheSlash/*
+
 # Cache files for the editor to use
 DerivedDataCache/*
 Content/_PROJECT_/Animations/*
@@ -85,3 +87,9 @@ Content/MovementAnimset/*
 Content/MV_MedievalVillage/*
 Content/RedPine_Biome/*
 Content/SwordAnimset/*
+Content/EssentialSpearShieldAnimations/*
+Content/DodgeAndRoll/*
+Content/MedievalProps_V02_Meshingun/*
+Content/MedievalKnives/*
+Content/StealthFinishers_KnifeAndHand/*
+Content/Crossbow_Animations/*

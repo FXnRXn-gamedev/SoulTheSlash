@@ -64,6 +64,11 @@ void ASlashPlayerController::SetupInputComponent()
 			EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &ASlashPlayerController::CrouchInput);
 		}
 
+		if (RollAction)
+		{
+			EnhancedInputComponent->BindAction(RollAction, ETriggerEvent::Started, this, &ASlashPlayerController::RollStartedInput);
+		}
+
 
 		// EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::LightAttack);
 		// EnhancedInputComponent->BindAction(HeavyAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::HeavyAttack);
@@ -84,6 +89,7 @@ void ASlashPlayerController::MoveInput(const FInputActionValue& Value)
 	if (SlashCharacter)
 	{
 		SlashCharacter->Move(Value);
+		SlashCharacter->GetActionKeyName(MoveAction);
 	}
 }
 
@@ -135,5 +141,13 @@ void ASlashPlayerController::CrouchInput()
 	if (SlashCharacter)
 	{
 		SlashCharacter->PlayerCrouch();
+	}
+}
+
+void ASlashPlayerController::RollStartedInput()
+{
+	if (SlashCharacter)
+	{
+		SlashCharacter->PerformRoll();
 	}
 }

@@ -15,6 +15,8 @@
 #include "Widgets/SlashPlayerStatWidget.h"
 #include "DrawDebugHelpers.h"
 #include "Component/StateComponent.h"
+#include "Item/SlashEquippableItemMaster.h"
+
 
 #pragma region Unreal Engine Callbacks
 
@@ -77,6 +79,9 @@ void ASlashPlayerCharacter::BeginPlay()
 		PlayerAnimInstance = Cast<USlashCharacteAnimInstanceBase>(GetMesh()->GetAnimInstance());
 		
 	}
+
+	// Initialize equippable items
+	InitializeEquippables();
 }
 
 void ASlashPlayerCharacter::Tick(float DeltaSeconds)
@@ -137,7 +142,7 @@ void ASlashPlayerCharacter::Move(const FInputActionValue& Value)
 {
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
-	if (Controller != nullptr)
+	if (Controller != nullptr && StateComponent->MovementInput)
 	{
 		const FRotator Rotation = Controller->GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
@@ -191,20 +196,24 @@ void ASlashPlayerCharacter::StopJump()
 
 void ASlashPlayerCharacter::Sprint()
 {
-	if (StatComponent)
+	if (MovePressedKey.GetFName() == FName("W"))
 	{
-		if (StatComponent->CheckPlayerHasEnoughStamina(5.0f) && IsPlayerMoving())
+		if (StatComponent)
 		{
-			//GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
-			StatComponent->DecreaseStamina(StatComponent->StaminaDegenRate);
-			bIsSprinting = true;
-		}
-		else
-		{
-			bIsSprinting = false;
-			//GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+			if (StatComponent->CheckPlayerHasEnoughStamina(5.0f) && IsPlayerMoving())
+			{
+				//GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+				StatComponent->DecreaseStamina(StatComponent->StaminaDegenRate);
+				bIsSprinting = true;
+			}
+			else
+			{
+				bIsSprinting = false;
+				//GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+			}
 		}
 	}
+	
 	
 }
 
@@ -233,7 +242,206 @@ void ASlashPlayerCharacter::PlayerCrouch()
 	}
 }
 
+void ASlashPlayerCharacter::PerformRoll()
+{
+	FString KeyName = MovePressedKey.GetDisplayName().ToString();
+	bIsRolling = true;
+	if (KeyName == "W")
+	{
+		if (PlayerAnimInstance && RollForwardAnimMontage)
+		{
+			PlayerAnimInstance->Montage_Play(RollForwardAnimMontage, 1.0f);
+		}
+		
+		FOnMontageEnded MontageEndedDelegate;
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollForwardAnimMontage);
+		
+	}
+	else if (KeyName == "S")
+	{
+		if (PlayerAnimInstance && RollBackwardAnimMontage)
+		{
+			PlayerAnimInstance->Montage_Play(RollBackwardAnimMontage, 1.0f);
+		}
+		
+		FOnMontageEnded MontageEndedDelegate;
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollBackwardAnimMontage);
+		
+	}
+	else if (KeyName == "A")
+	{
+		if (PlayerAnimInstance && RollLeftAnimMontage)
+		{
+			PlayerAnimInstance->Montage_Play(RollLeftAnimMontage, 1.0f);
+		}
+	
+		FOnMontageEnded MontageEndedDelegate;
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollLeftAnimMontage);
+	}
+	else if (KeyName == "D")
+	{
+		if (PlayerAnimInstance && RollRightAnimMontage)
+		{
+			PlayerAnimInstance->Montage_Play(RollRightAnimMontage, 1.0f);
+		}
+
+		FOnMontageEnded MontageEndedDelegate;
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollRightAnimMontage);
+		
+	}
+	
+}
+
 #pragma endregion
+
+
+#pragma region Equip/Unequip
+
+void ASlashPlayerCharacter::InitializeEquippables()
+{
+	
+	// Create a copy of the setup to avoid modifying while iterating
+	TMap<EItemTypeEnum, FEquippableStruct> OriginalSetup = EquippableSetup;
+
+	// Clear the original map to rebuild it with spawned items
+	EquippableSetup.Empty();
+	for (const auto& element : OriginalSetup)
+	{
+		if (!element.Value.ItemActor || !GetWorld())
+		{
+			// Keep the original entry if no ItemActor or no World
+			EquippableSetup.Add(element.Key, element.Value);
+			continue;
+		}
+
+		// Spawn Item
+		FVector SpawnLocation = FVector::ZeroVector;
+		FRotator SpawnRotation = FRotator::ZeroRotator;
+        
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ASlashEquippableItemMaster* SpawnedItem = GetWorld()->SpawnActor<ASlashEquippableItemMaster>(
+			element.Value.ItemActor, SpawnLocation, SpawnRotation, SpawnParams);
+
+		if (SpawnedItem)
+		{
+			FEquippableStruct NewEquippable;
+			NewEquippable.ItemActor = element.Value.ItemActor;
+			NewEquippable.AttachSocket = element.Value.AttachSocket;
+			NewEquippable.EquipHand = element.Value.EquipHand;
+			NewEquippable.ActorRef = SpawnedItem->GetClass();  // Store the actual actor instance, not the class
+			NewEquippable.Equipped = element.Value.Equipped;
+
+			EquippableSetup.Add(element.Key, NewEquippable);
+
+			// Attach Item if needed
+			if (!NewEquippable.Equipped)
+			{
+				AttachItemUnequipped(NewEquippable, SpawnedItem);
+			}
+		}
+		else
+		{
+			// If spawning failed, keep the original entry
+			EquippableSetup.Add(element.Key, element.Value);
+			UE_LOG(LogTemp, Warning, TEXT("Failed to spawn equippable item for key: %d"), (int32)element.Key);
+		}
+
+	}
+}
+
+void ASlashPlayerCharacter::AttachItemUnequipped(FEquippableStruct EquippableStruct, AActor* Actor)
+{
+	// This switch block is the C++ equivalent of the "Switch on Socket_Enum" node
+	FName SocketToAttachTo;
+
+	// Set up the attachment rules, matching the pins on the Blueprint node
+	const FAttachmentTransformRules AttachmentRules
+	(
+		EAttachmentRule::SnapToTarget, // Location Rule
+		EAttachmentRule::SnapToTarget, // Rotation Rule
+		EAttachmentRule::KeepRelative, // Scale Rule
+		true                           // bWeldSimulatedBodies
+	);
+	
+	switch (EquippableStruct.AttachSocket)
+	{
+	case ESocketEnum::WeaponBowBack_Socket:
+		SocketToAttachTo = FName("WeaponBowBack_Socket");
+		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
+		break;
+	case ESocketEnum::WeaponCrossbowBack_Socket:
+		SocketToAttachTo = FName("WeaponCrossbowBack_Socket");
+		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
+		break;
+	case ESocketEnum::WeaponSword_Socket:
+		SocketToAttachTo = FName("WeaponSword_Socket");
+		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
+		break;
+	case ESocketEnum::WeaponKnife_Socket:
+		SocketToAttachTo = FName("WeaponKnife_Socket");
+		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
+		break;
+	}
+}
+
+UAnimMontage* ASlashPlayerCharacter::GetEquipMontage(FEquippableStruct EquippableStruct)
+{
+
+	switch (EquippableStruct.AttachSocket)
+	{
+	case ESocketEnum::WeaponBowBack_Socket:
+		return EquipBowAnimMontage;
+	case ESocketEnum::WeaponCrossbowBack_Socket:
+		return nullptr;
+	case ESocketEnum::WeaponSword_Socket:
+		return EquipSwordAnimMontage;
+	case ESocketEnum::WeaponKnife_Socket:
+		return EquipKnifeAnimMontage;
+	default:
+		return nullptr;
+	}
+}
+
+UAnimMontage* ASlashPlayerCharacter::GetUnequipMontage(FEquippableStruct EquippableStruct)
+{
+
+	switch (EquippableStruct.AttachSocket)
+	{
+	case ESocketEnum::WeaponBowBack_Socket:
+		return UnequipBowAnimMontage;
+	case ESocketEnum::WeaponCrossbowBack_Socket:
+		return nullptr;
+	case ESocketEnum::WeaponSword_Socket:
+		return UnequipSwordAnimMontage;
+	case ESocketEnum::WeaponKnife_Socket:
+		return UnequipKnifeAnimMontage;
+	default:
+		return nullptr;
+	}
+}
+
+void ASlashPlayerCharacter::SetEquipStatus(EItemTypeEnum ItemType, bool bEquipped)
+{
+	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
+	if (FoundItem)
+	{
+		FoundItem->Equipped = bEquipped;
+	}
+	else
+	{
+		EquippableSetup.Add(ItemType, FEquippableStruct());
+	}
+	
+	
+}
+
+
+#pragma endregion 
 
 #pragma region UI
 
@@ -365,6 +573,68 @@ void ASlashPlayerCharacter::FindOutGroundDistance()
 
 	
 }
+
+void ASlashPlayerCharacter::OnMontageCompleted(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (bInterrupted)
+	{
+		// The montage was interrupted by another montage
+		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Interrupted!"));
+		if (Montage && PlayerAnimInstance->Montage_IsPlaying(Montage))
+		{
+			PlayerAnimInstance->Montage_Stop(0.1f, Montage);
+		}
+	}
+	else
+	{
+		// The montage completed successfully
+		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Completed."));
+		bIsRolling = false;
+		// FRotator ActorRotation = GetActorRotation();
+		// FRotator BaseAimRotation = GetBaseAimRotation();
+		//
+		// FRotator NewRotation( BaseAimRotation.Pitch, BaseAimRotation.Yaw, ActorRotation.Roll );
+		//
+		// SetActorRotation(NewRotation);
+
+		//SetCharacterState(ECharacterState::Idle);
+	}
+
+	
+	
+}
+
+void ASlashPlayerCharacter::GetActionKeyName(const UInputAction* InputAction)
+{
+	if (!InputAction)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("InputAction is null"));
+		return;
+	}
+	ASlashPlayerController* PC = Cast<ASlashPlayerController>(GetController());
+	
+	if (ULocalPlayer* LocalPlayer = GetWorld()->GetFirstPlayerController()->GetLocalPlayer())
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
+		{
+			TArray<FKey> MappedKeys;
+			MappedKeys = Subsystem->QueryKeysMappedToAction(InputAction);
+
+			// Log all keys mapped to this action
+			for (const FKey& Key : MappedKeys)
+			{
+				if (PC->IsInputKeyDown(Key))
+				{
+					MovePressedKey = Key;
+					//UE_LOG(LogTemp, Warning, TEXT("%s"), *Key.GetDisplayName().ToString());
+				}
+				
+
+			}
+		}
+	}
+}
+
 
 #pragma region Notify Handlers
 

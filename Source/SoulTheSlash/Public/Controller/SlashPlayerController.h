@@ -78,6 +78,7 @@ private:
 	void SprintInput();
 	void SprintCompletedInput();
 	void CrouchInput();
+	void RollStartedInput();
 
 	// Reference to controlled character
 	UPROPERTY()

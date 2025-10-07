@@ -61,7 +61,7 @@ void USlashCharacteAnimInstanceBase::NativeThreadSafeUpdateAnimation(float Delta
 	UpdateJumpFallData();
 	UpdateVelocityData();
 	UpdateJumpFallRecoveryDataThreadSafe(DeltaSeconds);
-	
+	UpdateBlendWeightDataThreadSafe(DeltaSeconds);
 }
 
 void USlashCharacteAnimInstanceBase::UpdateVelocityData()
@@ -136,6 +136,30 @@ void USlashCharacteAnimInstanceBase::UpdateJumpFallRecoveryDataThreadSafe(float 
 		}
 	}
 }
+
+void USlashCharacteAnimInstanceBase::UpdateBlendWeightDataThreadSafe(float DeltaSeconds)
+{
+	// Inputs
+	float CurrentWeight = UpperbodyDynamicAdditiveWeight; 
+	float TargetWeight = 0.0f;
+	float InterpSpeed = 6.0f;
+
+	// Step 1: Interp to target
+	float InterpValue = FMath::FInterpTo(CurrentWeight, TargetWeight, DeltaSeconds, InterpSpeed);
+
+	// Step 2: Check montage and ground condition
+	bool bIsMontagePlaying = IsAnyMontagePlaying();
+	bool bIsOnGround = OwnerCharacter && GetIsOnGround();
+
+	bool bCondition = bIsMontagePlaying && bIsOnGround;
+
+	// Step 3: Select float
+	float FinalValue = bCondition ? 1.0f : InterpValue;
+
+	// Store result
+	UpperbodyDynamicAdditiveWeight = FinalValue;
+}
+
 
 EAnimCardinalDirection USlashCharacteAnimInstanceBase::SelectCardinalDirectionFromAngle(float Angle)
 {
