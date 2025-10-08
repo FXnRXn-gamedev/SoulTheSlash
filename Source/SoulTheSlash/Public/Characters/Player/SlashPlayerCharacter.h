@@ -89,6 +89,9 @@ public:
 	// Public Properties
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|EquippableData")
 	TMap<EItemTypeEnum, FEquippableStruct> EquippableSetup;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Crawl")
+	bool bCrawlMode = false;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Public Setting")
 	bool bIsCrouching = false;
@@ -113,6 +116,9 @@ protected:
 	virtual void Tick(float DeltaSeconds) override;
 
 #pragma region Setting
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Setting")
+	FVector2D MoveActionValue;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Setting")
 	bool bLeftHandClosed = false;
@@ -218,7 +224,30 @@ protected:
 	
 #pragma endregion 
 
+# pragma region Crawl
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
+	float FwdBwdDirection = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
+	float DirectionCALC = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
+	bool CrawlRotateRight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
+	bool CrawlIsRotating;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
+	float RotationDifference = 0.0f;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
+	float CrawlCapsuleHalfHeight = 30.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
+	float CrawlSpeed = 100.0f;
+
+#pragma endregion 
 
 public:
 	// Movement
@@ -230,6 +259,8 @@ public:
 	void SprintCompleted();
 	void PlayerCrouch();
 	void PerformRoll();
+	void EndRoll();
+	void ToggleCrawlMode();
 
 protected:
 	// Equip/Unequip
@@ -238,6 +269,9 @@ protected:
 	UAnimMontage* GetEquipMontage(FEquippableStruct EquippableStruct);
 	UAnimMontage* GetUnequipMontage(FEquippableStruct EquippableStruct);
 	void SetEquipStatus(EItemTypeEnum ItemType, bool bEquipped);
+
+	// Crawl
+	void OnCrawlDelayCompleted();
 	
 	// Create and setup widget
 	void SetupPlayerWidget();
@@ -248,13 +282,14 @@ protected:
 	//
 	bool IsPlayerMoving();
 
+
 	// State Management
 	void SetCharacterState(ECharacterState NewState);
 
 	void FindOutGroundDistance();
 
 	UFUNCTION()
-	void OnMontageCompleted(UAnimMontage* Montage, bool bInterrupted);
+	void OnRollMontageCompleted(UAnimMontage* Montage, bool bInterrupted);
 	
 
 public:

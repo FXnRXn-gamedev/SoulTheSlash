@@ -47,6 +47,9 @@ protected:
 	UInputAction* CrouchAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
+	UInputAction* CrawlAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
 	UInputAction* DodgeAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
@@ -79,6 +82,9 @@ private:
 	void SprintCompletedInput();
 	void CrouchInput();
 	void RollStartedInput();
+	void CrawlInput();
+	void CrawlStarted();
+	void CrawlStopped();
 
 	// Reference to controlled character
 	UPROPERTY()

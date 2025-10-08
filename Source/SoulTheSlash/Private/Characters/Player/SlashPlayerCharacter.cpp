@@ -14,8 +14,10 @@
 #include "Widgets/SlashPlayerHUDWidget.h"
 #include "Widgets/SlashPlayerStatWidget.h"
 #include "DrawDebugHelpers.h"
+#include "KismetAnimationLibrary.h"
 #include "Component/StateComponent.h"
 #include "Item/SlashEquippableItemMaster.h"
+
 
 
 #pragma region Unreal Engine Callbacks
@@ -141,6 +143,7 @@ void ASlashPlayerCharacter::Tick(float DeltaSeconds)
 void ASlashPlayerCharacter::Move(const FInputActionValue& Value)
 {
 	FVector2D MovementVector = Value.Get<FVector2D>();
+	MoveActionValue = MovementVector;
 
 	if (Controller != nullptr && StateComponent->MovementInput)
 	{
@@ -228,22 +231,30 @@ void ASlashPlayerCharacter::SprintCompleted()
 
 void ASlashPlayerCharacter::PlayerCrouch()
 {
-	if (bIsCrouching)
+	if (bCrawlMode) return;
+
+	if (!GetCharacterMovement()->IsFalling())
 	{
-		UnCrouch();
-		bIsCrouching = false;
-		//GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+		if (bIsCrouching)
+		{
+			UnCrouch();
+			bIsCrouching = false;
+		}
+		else
+		{
+			GetCharacterMovement()->SetCrouchedHalfHeight(60.0f);
+			Crouch();
+			bIsCrouching = true;
+		}
 	}
-	else
-	{
-		Crouch();
-		bIsCrouching = true;
-		//GetCharacterMovement()->MaxWalkSpeed = CrouchSpeed;
-	}
+	
 }
 
 void ASlashPlayerCharacter::PerformRoll()
 {
+	// Disable collision with enemies during roll
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	
 	FString KeyName = MovePressedKey.GetDisplayName().ToString();
 	bIsRolling = true;
 	if (KeyName == "W")
@@ -254,7 +265,7 @@ void ASlashPlayerCharacter::PerformRoll()
 		}
 		
 		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
 		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollForwardAnimMontage);
 		
 	}
@@ -266,7 +277,7 @@ void ASlashPlayerCharacter::PerformRoll()
 		}
 		
 		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
 		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollBackwardAnimMontage);
 		
 	}
@@ -278,7 +289,7 @@ void ASlashPlayerCharacter::PerformRoll()
 		}
 	
 		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
 		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollLeftAnimMontage);
 	}
 	else if (KeyName == "D")
@@ -289,11 +300,80 @@ void ASlashPlayerCharacter::PerformRoll()
 		}
 
 		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnMontageCompleted);
+		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
 		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollRightAnimMontage);
 		
 	}
 	
+}
+
+void ASlashPlayerCharacter::EndRoll()
+{
+	// Re-enable collision
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+	
+}
+
+void ASlashPlayerCharacter::ToggleCrawlMode()
+{
+	if (!GetCharacterMovement()->IsFalling())
+	{
+		if (bIsCrouching) // true
+		{
+			bCrawlMode = false;
+		}
+		else // false
+		{
+			if (bCrawlMode)
+			{
+				bCrawlMode = false;
+			}
+			else
+			{
+				GetCharacterMovement()->SetCrouchedHalfHeight(CrawlCapsuleHalfHeight);
+				Crouch();
+			}
+			
+			// if (bCrawlMode)
+			// {
+			// 	// Exit crawl mode
+			// 	bCrawlMode = false;
+			// 	UnCrouch();
+			// 	bIsCrouching = false;
+			// 	GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+			// 	GetCharacterMovement()->bOrientRotationToMovement = true;
+			// 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
+			// 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
+			// }
+			// else
+			// {
+			// 	// Enter crawl mode
+			// 	bCrawlMode = true;
+			// 	Crouch();
+			// 	bIsCrouching = true;
+			// 	GetCharacterMovement()->MaxWalkSpeed = CrouchSpeed;
+			// 	GetCharacterMovement()->bOrientRotationToMovement = false;
+			// 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
+			// 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
+			// }
+			
+		}
+	}
+
+	if (!bCrawlMode)
+	{
+		const float DelayDuration = 0.35f;
+		if (GWorld)
+		{
+			FTimerHandle CrawlDelayTimerHandle;
+			GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle, this, &ASlashPlayerCharacter::OnCrawlDelayCompleted, DelayDuration, false);
+		}
+	}
+}
+
+void ASlashPlayerCharacter::OnCrawlDelayCompleted()
+{
+	UnCrouch();
 }
 
 #pragma endregion
@@ -441,6 +521,8 @@ void ASlashPlayerCharacter::SetEquipStatus(EItemTypeEnum ItemType, bool bEquippe
 }
 
 
+
+
 #pragma endregion 
 
 #pragma region UI
@@ -502,6 +584,8 @@ bool ASlashPlayerCharacter::IsPlayerMoving()
 		return false;
 	}
 }
+
+
 
 void ASlashPlayerCharacter::SetCharacterState(ECharacterState NewState)
 {
@@ -574,7 +658,7 @@ void ASlashPlayerCharacter::FindOutGroundDistance()
 	
 }
 
-void ASlashPlayerCharacter::OnMontageCompleted(UAnimMontage* Montage, bool bInterrupted)
+void ASlashPlayerCharacter::OnRollMontageCompleted(UAnimMontage* Montage, bool bInterrupted)
 {
 	if (bInterrupted)
 	{
@@ -600,7 +684,7 @@ void ASlashPlayerCharacter::OnMontageCompleted(UAnimMontage* Montage, bool bInte
 		//SetCharacterState(ECharacterState::Idle);
 	}
 
-	
+	EndRoll();
 	
 }
 

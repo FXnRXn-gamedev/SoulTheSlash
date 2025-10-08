@@ -69,6 +69,11 @@ void ASlashPlayerController::SetupInputComponent()
 			EnhancedInputComponent->BindAction(RollAction, ETriggerEvent::Started, this, &ASlashPlayerController::RollStartedInput);
 		}
 
+		if (CrawlAction)
+		{
+			EnhancedInputComponent->BindAction(CrawlAction, ETriggerEvent::Started, this, &ASlashPlayerController::CrawlInput);
+		}
+
 
 		// EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::LightAttack);
 		// EnhancedInputComponent->BindAction(HeavyAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::HeavyAttack);
@@ -151,3 +156,33 @@ void ASlashPlayerController::RollStartedInput()
 		SlashCharacter->PerformRoll();
 	}
 }
+
+void ASlashPlayerController::CrawlInput()
+{
+	if (SlashCharacter && SlashCharacter->bCrawlMode)
+	{
+		CrawlStopped();
+	}
+	else
+	{
+		CrawlStarted();
+	}
+}
+
+void ASlashPlayerController::CrawlStarted()
+{
+	if (SlashCharacter)
+	{
+		SlashCharacter->ToggleCrawlMode();
+	}
+}
+
+void ASlashPlayerController::CrawlStopped()
+{
+	if (SlashCharacter)
+	{
+		SlashCharacter->ToggleCrawlMode();
+	}
+}
+
+
