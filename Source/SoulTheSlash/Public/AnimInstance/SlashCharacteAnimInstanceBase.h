@@ -51,6 +51,12 @@ public:
 	FORCEINLINE FVector GetWorldVelocity() const {return Velocity; }
 
 	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
+	float InterpDirection;
+
+	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
+	float FwdBwdDirection;
+
+	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
 	FRotator WorldRotation;
 
 	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
@@ -70,6 +76,9 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
 	bool IsSprinting;
+
+	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
+	bool CrawlMode;
 
 	// Jumping
 	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))

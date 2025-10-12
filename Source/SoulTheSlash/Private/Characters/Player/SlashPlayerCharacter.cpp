@@ -17,7 +17,7 @@
 #include "KismetAnimationLibrary.h"
 #include "Component/StateComponent.h"
 #include "Item/SlashEquippableItemMaster.h"
-
+#include "Macros/SlashMacrosLibrary.h"
 
 
 #pragma region Unreal Engine Callbacks
@@ -90,6 +90,7 @@ void ASlashPlayerCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	CheckIfCrawlMode();
 	
 	
 	// if (GEngine)
@@ -114,6 +115,16 @@ void ASlashPlayerCharacter::Tick(float DeltaSeconds)
 			GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
 		}
 	}
+
+	if (!GetCharacterMovement()->IsFalling())
+	{
+		if (bCrawlMode)
+		{
+			GetCharacterMovement()->RotationRate = FRotator(0.0f, 85.0f, 0.0f);
+		}
+	}
+	
+	
 	if (bIsSprinting)
 	{
 		GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
@@ -125,6 +136,10 @@ void ASlashPlayerCharacter::Tick(float DeltaSeconds)
 	else if (bIsJumping)
 	{
 		GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+	}
+	else if (bCrawlMode)
+	{
+		GetCharacterMovement()->MaxWalkSpeedCrouched = CrawlSpeed;
 	}
 	else
 	{
@@ -250,6 +265,11 @@ void ASlashPlayerCharacter::PlayerCrouch()
 	
 }
 
+#pragma endregion
+
+
+#pragma region Roll
+
 void ASlashPlayerCharacter::PerformRoll()
 {
 	// Disable collision with enemies during roll
@@ -314,6 +334,40 @@ void ASlashPlayerCharacter::EndRoll()
 	
 }
 
+void ASlashPlayerCharacter::OnRollMontageCompleted(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (bInterrupted)
+	{
+		// The montage was interrupted by another montage
+		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Interrupted!"));
+		if (Montage && PlayerAnimInstance->Montage_IsPlaying(Montage))
+		{
+			PlayerAnimInstance->Montage_Stop(0.1f, Montage);
+		}
+	}
+	else
+	{
+		// The montage completed successfully
+		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Completed."));
+		bIsRolling = false;
+		// FRotator ActorRotation = GetActorRotation();
+		// FRotator BaseAimRotation = GetBaseAimRotation();
+		//
+		// FRotator NewRotation( BaseAimRotation.Pitch, BaseAimRotation.Yaw, ActorRotation.Roll );
+		//
+		// SetActorRotation(NewRotation);
+
+		//SetCharacterState(ECharacterState::Idle);
+	}
+
+	EndRoll();
+	
+}
+
+#pragma endregion
+
+#pragma region Crawl
+
 void ASlashPlayerCharacter::ToggleCrawlMode()
 {
 	if (!GetCharacterMovement()->IsFalling())
@@ -327,47 +381,132 @@ void ASlashPlayerCharacter::ToggleCrawlMode()
 			if (bCrawlMode)
 			{
 				bCrawlMode = false;
+				const float DelayDuration = 0.35f;
+				if (GWorld)
+				{
+					FTimerHandle CrawlDelayTimerHandle;
+					GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle, this, &ASlashPlayerCharacter::OnCrawlDelayCompleted, DelayDuration, false);
+				}
+
+				if (CrawlToStandtAnimMontage && PlayerAnimInstance)
+				{
+					StateComponent->MovementInput = false;
+					PlayerAnimInstance->Montage_Play(CrawlToStandtAnimMontage, 1.0f);
+					FOnMontageEnded MontageEndedDelegate;
+					MontageEndedDelegate.BindLambda([this](UAnimMontage* Montage, bool bInterrupted)
+					{
+						if (!bInterrupted)
+						{
+							// Montage completed successfully
+							// Your completion logic here
+							StateComponent->MovementInput = true;
+						}
+					});
+					PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, CrawlToStandtAnimMontage);
+
+				}
 			}
 			else
 			{
 				GetCharacterMovement()->SetCrouchedHalfHeight(CrawlCapsuleHalfHeight);
 				Crouch();
+				const float DelayDuration = 0.24f;
+				if (GWorld)
+				{
+					FTimerHandle CrawlDelayTimerHandle;
+					GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle,
+						[this]()
+					{
+							bCrawlMode = true;
+
+							//--> Disable strafe and aiming
+					},
+					DelayDuration,
+					false);
+				}
 			}
-			
-			// if (bCrawlMode)
-			// {
-			// 	// Exit crawl mode
-			// 	bCrawlMode = false;
-			// 	UnCrouch();
-			// 	bIsCrouching = false;
-			// 	GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
-			// 	GetCharacterMovement()->bOrientRotationToMovement = true;
-			// 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
-			// 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
-			// }
-			// else
-			// {
-			// 	// Enter crawl mode
-			// 	bCrawlMode = true;
-			// 	Crouch();
-			// 	bIsCrouching = true;
-			// 	GetCharacterMovement()->MaxWalkSpeed = CrouchSpeed;
-			// 	GetCharacterMovement()->bOrientRotationToMovement = false;
-			// 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
-			// 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
-			// }
-			
 		}
 	}
+	
+}
 
-	if (!bCrawlMode)
+void ASlashPlayerCharacter::CheckIfCrawlMode()
+{
+	if (bCrawlMode)
 	{
-		const float DelayDuration = 0.35f;
-		if (GWorld)
+		//Calculate Direction
+		const FVector Velocity = GetVelocity();
+		const FRotator BaseRotation = GetActorRotation();
+		DirectionCALC = UKismetAnimationLibrary::CalculateDirection(Velocity, BaseRotation);
+
+		if (MoveActionValue.Size() == 0.0f)
 		{
-			FTimerHandle CrawlDelayTimerHandle;
-			GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle, this, &ASlashPlayerCharacter::OnCrawlDelayCompleted, DelayDuration, false);
+			
 		}
+		else
+		{
+			bool bDirectCalc1 = USlashMacrosLibrary::IsFloatInRange(DirectionCALC, 75.0f, 180.0f, true, true);
+			bool bDirectCalc2 = USlashMacrosLibrary::IsFloatInRange(DirectionCALC, -180.0f, -75.0f, true, true);
+
+			if (bDirectCalc1 || bDirectCalc2)
+			{
+				CrawlRotateRight = USlashMacrosLibrary::IsFloatInRange(DirectionCALC, 0.0f, 180.0f, true, true);
+			}
+		}
+		
+	}
+}
+
+void ASlashPlayerCharacter::ResetDoOnce()
+{
+	GetCharacterMovement()->bAllowPhysicsRotationDuringAnimRootMotion = false;
+
+	if (bHasExecutedOnce)
+	{
+		// Add your specific logic here
+		GetCharacterMovement()->bAllowPhysicsRotationDuringAnimRootMotion = true;
+		PlayCrawlMontage();
+		// Set the boolean to false to prevent further execution
+		bHasExecutedOnce = false; 
+	}
+}
+
+void ASlashPlayerCharacter::PlayCrawlMontage()
+{
+	UAnimMontage* CrawlRotateMontage = CrawlRotateRight? CrawlRotateRightAnimMontage : CrawlRotateLeftAnimMontage;
+
+	if (CrawlRotateMontage && PlayerAnimInstance)
+	{
+		PlayerAnimInstance->Montage_Play(CrawlRotateMontage, 1.0f);
+
+		// Bind delegates before playing the montage
+		FOnMontageBlendingOutStarted BlendingOutDelegate;
+		BlendingOutDelegate.BindLambda([this](UAnimMontage* Montage, bool bInterrupted)
+		{
+			if (!bInterrupted)
+			{
+				// Montage completed successfully
+				// Your completion logic here
+				const float DelayDuration = 0.4f;
+				if (GWorld)
+				{
+					FTimerHandle CrawlDelayTimerHandle;
+					GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle,
+						[this]()
+					{
+							ResetDoOnce();
+					},
+					DelayDuration,
+					false);
+				}
+				
+			}
+			else
+			{
+				
+			}
+		});
+		PlayerAnimInstance->Montage_SetBlendingOutDelegate(BlendingOutDelegate, CrawlRotateMontage);
 	}
 }
 
@@ -377,7 +516,6 @@ void ASlashPlayerCharacter::OnCrawlDelayCompleted()
 }
 
 #pragma endregion
-
 
 #pragma region Equip/Unequip
 
@@ -413,7 +551,7 @@ void ASlashPlayerCharacter::InitializeEquippables()
 			NewEquippable.ItemActor = element.Value.ItemActor;
 			NewEquippable.AttachSocket = element.Value.AttachSocket;
 			NewEquippable.EquipHand = element.Value.EquipHand;
-			NewEquippable.ActorRef = SpawnedItem->GetClass();  // Store the actual actor instance, not the class
+			NewEquippable.ActorRef = SpawnedItem;  // Store the actual actor instance, not the class
 			NewEquippable.Equipped = element.Value.Equipped;
 
 			EquippableSetup.Add(element.Key, NewEquippable);
@@ -421,7 +559,7 @@ void ASlashPlayerCharacter::InitializeEquippables()
 			// Attach Item if needed
 			if (!NewEquippable.Equipped)
 			{
-				AttachItemUnequipped(NewEquippable, SpawnedItem);
+				AttachItemSocket(NewEquippable, SpawnedItem);
 			}
 		}
 		else
@@ -434,7 +572,7 @@ void ASlashPlayerCharacter::InitializeEquippables()
 	}
 }
 
-void ASlashPlayerCharacter::AttachItemUnequipped(FEquippableStruct EquippableStruct, AActor* Actor)
+void ASlashPlayerCharacter::AttachItemSocket(FEquippableStruct EquippableStruct, AActor* Actor)
 {
 	// This switch block is the C++ equivalent of the "Switch on Socket_Enum" node
 	FName SocketToAttachTo;
@@ -505,23 +643,375 @@ UAnimMontage* ASlashPlayerCharacter::GetUnequipMontage(FEquippableStruct Equippa
 	}
 }
 
+
+
+
+
+void ASlashPlayerCharacter::EquipItem(EItemTypeEnum ItemType)
+{
+	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
+
+	// This switch block is the C++ equivalent of the "Switch on Socket_Enum" node
+	FName HandToAttachTo;
+
+	// Set up the attachment rules, matching the pins on the Blueprint node
+	const FAttachmentTransformRules AttachmentRules
+	(
+		EAttachmentRule::SnapToTarget, // Location Rule
+		EAttachmentRule::SnapToTarget, // Rotation Rule
+		EAttachmentRule::KeepRelative, // Scale Rule
+		true                           // bWeldSimulatedBodies
+	);
+	
+	if (FoundItem)
+	{
+		switch (FoundItem->AttachSocket)
+		{
+		case ESocketEnum::WeaponBowBack_Socket:
+			HandToAttachTo = FName("HoldItem_Bow_l");
+			break;
+		case ESocketEnum::WeaponCrossbowBack_Socket:
+			break;
+		case ESocketEnum::WeaponSword_Socket:
+			HandToAttachTo = FName("HoldItem_Sword_r");
+			break;
+		case ESocketEnum::WeaponKnife_Socket:
+			HandToAttachTo = FName("HoldItem_Sword_r");
+			break;
+		}
+
+		FoundItem->ActorRef->AttachToComponent(GetMesh(), AttachmentRules, HandToAttachTo);
+
+		SetEquipStatus(ItemType, true);
+	}
+}
+
+void ASlashPlayerCharacter::UnequipItem(EItemTypeEnum ItemType)
+{
+	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
+	if (FoundItem)
+	{
+		AttachItemSocket(*FoundItem, FoundItem->ActorRef);
+		SetEquipStatus(ItemType, false);
+	}
+}
+
+void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
+{
+	// Set the current equipping item type
+	CurrentEquippingItemType = ItemType;
+
+	
+	
+	FEquippableStruct* PrimaryItem = EquippableSetup.Find(EItemTypeEnum::Primary);
+	FEquippableStruct* SecondaryItem = EquippableSetup.Find(EItemTypeEnum::Secondary);
+	FEquippableStruct* Placeholder1Item = EquippableSetup.Find(EItemTypeEnum::Placeholder1);
+	bIsPrimaryItemEquipped = (PrimaryItem->EquipHand == SecondaryItem->EquipHand && PrimaryItem->EquipHand == Placeholder1Item->EquipHand) && PrimaryItem->Equipped ;
+	bIsSecondaryItemEquipped = (SecondaryItem->EquipHand == PrimaryItem->EquipHand && SecondaryItem->EquipHand == Placeholder1Item->EquipHand) && SecondaryItem->Equipped ;
+	bIsPlaceholder1ItemEquipped = (Placeholder1Item->EquipHand == PrimaryItem->EquipHand && Placeholder1Item->EquipHand == SecondaryItem->EquipHand) && Placeholder1Item->Equipped ;
+
+	
+	// Prevent equipping/unequipping if an animation montage is currently playing
+	if (!PlayerAnimInstance->Montage_IsPlaying(PlayerAnimInstance->GetCurrentActiveMontage()))
+	{
+		FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
+		if (FoundItem->ActorRef)
+		{
+			switch (ItemType)
+			{
+			case EItemTypeEnum::Primary:
+				if (bIsPrimaryItemEquipped)
+				{
+					UAnimMontage* UnequipSecondaryMontage			= GetUnequipMontage(*SecondaryItem);
+					if (UnequipSecondaryMontage && PlayerAnimInstance)
+					{
+						PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage, 1.75f);
+						CurrentEquippingItemType = EItemTypeEnum::Secondary;
+						// Bind a delegate to the montage end event if needed
+						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+						
+						FOnMontageEnded MontageEndedDelegate;
+						MontageEndedDelegate.BindLambda([this, Placeholder1Item, PrimaryItem](UAnimMontage* Montage, bool bInterrupted)
+						{
+							if (!bInterrupted)
+							{
+								// Montage completed successfully
+								// Your completion logic here
+
+								UAnimMontage* UnequipPalceholder1Montage		= GetUnequipMontage(*Placeholder1Item);
+								if (UnequipPalceholder1Montage && PlayerAnimInstance)
+								{
+									PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage, 1.75f);
+									CurrentEquippingItemType = EItemTypeEnum::Placeholder1;
+									// Bind a delegate to the montage end event if needed
+									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+									FOnMontageEnded MontageEndedDelegate;
+									MontageEndedDelegate.BindLambda([this, PrimaryItem](UAnimMontage* Montage, bool bInterrupted)
+									{
+										if (!bInterrupted)
+										{
+											// Montage completed successfully
+											// Your completion logic here
+											UAnimMontage* EquipPrimaryMontage				= GetEquipMontage(*PrimaryItem);
+											if (EquipPrimaryMontage && PlayerAnimInstance)
+											{
+												PlayerAnimInstance->Montage_Play(EquipPrimaryMontage, 1.75f);
+												CurrentEquippingItemType = EItemTypeEnum::Primary;
+												// Bind a delegate to the montage end event if needed
+												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+											}
+								
+										}
+									});
+									PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPalceholder1Montage);
+								}
+							}
+						});
+						PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipSecondaryMontage);
+					}
+				}
+				else
+				{
+					if (FoundItem->Equipped)
+					{
+						UAnimMontage* UnequipMontage = GetUnequipMontage(*FoundItem);
+						if (UnequipMontage && PlayerAnimInstance)
+						{
+							PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
+							// Bind a delegate to the montage end event if needed
+							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+						}
+						
+					}
+					else
+					{
+						UAnimMontage* EquipMontage = GetEquipMontage(*FoundItem);
+						if (EquipMontage && PlayerAnimInstance)
+						{
+							PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
+							// Bind a delegate to the montage end event if needed
+							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+						}
+							
+					}
+					
+				}
+				break;
+			case EItemTypeEnum::Secondary:
+				if (bIsSecondaryItemEquipped)
+				{
+					UAnimMontage* UnequipPrimaryMontage				= GetUnequipMontage(*PrimaryItem);
+					if (UnequipPrimaryMontage && PlayerAnimInstance)
+					{
+						PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
+						CurrentEquippingItemType = EItemTypeEnum::Primary;
+						// Bind a delegate to the montage end event if needed
+						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+						FOnMontageEnded MontageEndedDelegate;
+						MontageEndedDelegate.BindLambda([this, Placeholder1Item, SecondaryItem](UAnimMontage* Montage, bool bInterrupted)
+						{
+							if (!bInterrupted)
+							{
+								// Montage completed successfully
+								// Your completion logic here
+								UAnimMontage* UnequipPalceholder1Montage		= GetUnequipMontage(*Placeholder1Item);
+								if (UnequipPalceholder1Montage && PlayerAnimInstance)
+								{
+									PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage, 1.75f);
+									CurrentEquippingItemType = EItemTypeEnum::Placeholder1;
+									// Bind a delegate to the montage end event if needed
+									FOnMontageEnded MontageEndedDelegate;
+									MontageEndedDelegate.BindLambda([this, SecondaryItem](UAnimMontage* Montage, bool bInterrupted)
+									{
+										if (!bInterrupted)
+										{
+											// Montage completed successfully
+											// Your completion logic here
+											UAnimMontage* EquipSecondaryMontage				= GetEquipMontage(*SecondaryItem);
+											if (EquipSecondaryMontage && PlayerAnimInstance)
+											{
+												PlayerAnimInstance->Montage_Play(EquipSecondaryMontage, 1.75f);
+												CurrentEquippingItemType = EItemTypeEnum::Secondary;
+												// Bind a delegate to the montage end event if needed
+												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+											}
+										}
+									});
+									PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPalceholder1Montage);
+
+									
+									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+								}
+							}
+						});
+						PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPrimaryMontage);
+					}
+					
+					
+				}
+				else
+				{
+					if (FoundItem->Equipped)
+					{
+						UAnimMontage* UnequipMontage = GetUnequipMontage(*FoundItem);
+						if (UnequipMontage && PlayerAnimInstance)
+						{
+							PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
+							// Bind a delegate to the montage end event if needed
+							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+						}
+					}
+					else
+					{
+						UAnimMontage* EquipMontage = GetEquipMontage(*FoundItem);
+						if (EquipMontage && PlayerAnimInstance)
+						{
+							PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
+							// Bind a delegate to the montage end event if needed
+							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+						}
+							
+					}
+				}
+				break;
+			case EItemTypeEnum::Placeholder1:
+				if (bIsPlaceholder1ItemEquipped)
+				{
+					UAnimMontage* UnequipPrimaryMontage				= GetUnequipMontage(*PrimaryItem);
+					if (UnequipPrimaryMontage && PlayerAnimInstance)
+					{
+						PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
+						CurrentEquippingItemType = EItemTypeEnum::Primary;
+						// Bind a delegate to the montage end event if needed
+						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+						FOnMontageEnded MontageEndedDelegate;
+						MontageEndedDelegate.BindLambda([this, SecondaryItem, Placeholder1Item](UAnimMontage* Montage, bool bInterrupted)
+						{
+							if (!bInterrupted)
+							{
+								// Montage completed successfully
+								// Your completion logic here
+								UAnimMontage* UnequipSecondaryMontage			= GetUnequipMontage(*SecondaryItem);
+								if (UnequipSecondaryMontage && PlayerAnimInstance)
+								{
+									PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage, 1.75f);
+									CurrentEquippingItemType = EItemTypeEnum::Secondary;
+									// Bind a delegate to the montage end event if needed
+									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+									FOnMontageEnded MontageEndedDelegate;
+									MontageEndedDelegate.BindLambda([this, Placeholder1Item](UAnimMontage* Montage, bool bInterrupted)
+									{
+										if (!bInterrupted)
+										{
+											// Montage completed successfully
+											// Your completion logic here
+											UAnimMontage* EquipPalceholder1Montage			= GetEquipMontage(*Placeholder1Item);
+											if (EquipPalceholder1Montage && PlayerAnimInstance)
+											{
+												PlayerAnimInstance->Montage_Play(EquipPalceholder1Montage, 1.75f);
+												CurrentEquippingItemType = EItemTypeEnum::Placeholder1;
+												// Bind a delegate to the montage end event if needed
+												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+											}
+										}
+									});
+									PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipSecondaryMontage);
+
+								}
+							}
+						});
+						PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPrimaryMontage);
+
+					}
+					
+					
+				}
+				else
+				{
+					if (FoundItem->Equipped)
+					{
+						UAnimMontage* UnequipMontage = GetUnequipMontage(*FoundItem);
+						if (UnequipMontage && PlayerAnimInstance)
+						{
+							PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
+							// Bind a delegate to the montage end event if needed
+							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+						}
+					}
+					else
+					{
+						UAnimMontage* EquipMontage = GetEquipMontage(*FoundItem);
+						if (EquipMontage && PlayerAnimInstance)
+						{
+							PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
+							// Bind a delegate to the montage end event if needed
+							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+						}
+							
+					}
+				}
+				break;
+			}
+			
+		}
+		
+	}
+}
+
+
+void ASlashPlayerCharacter::OnEquipNotifyBegin(FName NotifyName,
+                                               const FBranchingPointNotifyPayload& BranchingPointNotifyPayload)
+{
+	EquipItem(CurrentEquippingItemType);
+}
+
+void ASlashPlayerCharacter::OnUnequipNotifyBegin(FName NotifyName,
+	const FBranchingPointNotifyPayload& BranchingPointNotifyPayload)
+{
+	UnequipItem(CurrentEquippingItemType);
+}
+
 void ASlashPlayerCharacter::SetEquipStatus(EItemTypeEnum ItemType, bool bEquipped)
 {
 	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
 	if (FoundItem)
 	{
 		FoundItem->Equipped = bEquipped;
+		
+		ASlashEquippableItemMaster* ActorInstance = FoundItem->ActorRef ? Cast<ASlashEquippableItemMaster>(FoundItem->ActorRef) : nullptr;
+		if (ActorInstance)
+		{
+			ActorInstance->TogglePhysics(!bEquipped);
+			ActorInstance->SetPivot(bEquipped);
+		}
+		switch (FoundItem->EquipHand)
+		{
+		case EEquipHandEnum::HoldItem_Sword_r:
+			if (bEquipped)
+			{
+				bRightHandClosed = ActorInstance->ClosedFist;
+			}
+			else
+			{
+				bRightHandClosed = false;
+			}
+			
+			break;
+		case EEquipHandEnum::HoldItem_Bow_l:
+			if (bEquipped)
+			{
+				bLeftHandClosed = ActorInstance->ClosedFist;
+			}
+			else
+			{
+				bLeftHandClosed = false;
+			}
+			
+			break;
+		}
 	}
-	else
-	{
-		EquippableSetup.Add(ItemType, FEquippableStruct());
-	}
-	
 	
 }
-
-
-
 
 #pragma endregion 
 
@@ -584,8 +1074,6 @@ bool ASlashPlayerCharacter::IsPlayerMoving()
 		return false;
 	}
 }
-
-
 
 void ASlashPlayerCharacter::SetCharacterState(ECharacterState NewState)
 {
@@ -655,36 +1143,6 @@ void ASlashPlayerCharacter::FindOutGroundDistance()
 		);
 	}
 
-	
-}
-
-void ASlashPlayerCharacter::OnRollMontageCompleted(UAnimMontage* Montage, bool bInterrupted)
-{
-	if (bInterrupted)
-	{
-		// The montage was interrupted by another montage
-		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Interrupted!"));
-		if (Montage && PlayerAnimInstance->Montage_IsPlaying(Montage))
-		{
-			PlayerAnimInstance->Montage_Stop(0.1f, Montage);
-		}
-	}
-	else
-	{
-		// The montage completed successfully
-		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Completed."));
-		bIsRolling = false;
-		// FRotator ActorRotation = GetActorRotation();
-		// FRotator BaseAimRotation = GetBaseAimRotation();
-		//
-		// FRotator NewRotation( BaseAimRotation.Pitch, BaseAimRotation.Yaw, ActorRotation.Roll );
-		//
-		// SetActorRotation(NewRotation);
-
-		//SetCharacterState(ECharacterState::Idle);
-	}
-
-	EndRoll();
 	
 }
 

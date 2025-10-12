@@ -159,14 +159,18 @@ void ASlashPlayerController::RollStartedInput()
 
 void ASlashPlayerController::CrawlInput()
 {
-	if (SlashCharacter && SlashCharacter->bCrawlMode)
+	if (SlashCharacter)
 	{
-		CrawlStopped();
+		SlashCharacter->ToggleCrawlMode();
 	}
-	else
-	{
-		CrawlStarted();
-	}
+	// if (SlashCharacter && SlashCharacter->bCrawlMode)
+	// {
+	// 	CrawlStopped();
+	// }
+	// else
+	// {
+	// 	CrawlStarted();
+	// }
 }
 
 void ASlashPlayerController::CrawlStarted()

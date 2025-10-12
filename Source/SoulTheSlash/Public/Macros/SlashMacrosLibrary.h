@@ -15,20 +15,23 @@ class SOULTHESLASH_API USlashMacrosLibrary : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, Category = "---Slash---|Flow Control")
+	UFUNCTION(BlueprintCallable, Category = "---Slash---|Math|Flow Control")
 	static void OpenGate(bool& bIsGateOpen);
 
-	UFUNCTION(BlueprintCallable, Category = "---Slash---|Flow Control")
+	UFUNCTION(BlueprintCallable, Category = "---Slash---|Math|Flow Control")
 	static void CloseGate(bool& bIsGateOpen);
 
-	UFUNCTION(BlueprintCallable, Category = "---Slash---|Flow Control")
+	UFUNCTION(BlueprintCallable, Category = "---Slash---|Math|Flow Control")
 	static void ToggleGate(bool& bIsGateOpen);
 
-	UFUNCTION(BlueprintCallable, Category = "---Slash---|Flow Control")
+	UFUNCTION(BlueprintCallable, Category = "---Slash---|Math|Flow Control")
 	static bool PassThroughGate(bool bIsGateOpen);
 
-	UFUNCTION(BlueprintCallable, Category = "---Slash---|Flow Control")
+	UFUNCTION(BlueprintCallable, Category = "---Slash---|Math|Flow Control")
 	static void Gate(bool bCondition, bool& bIsGateOpen);
+
+	UFUNCTION(BlueprintPure, Category = "---Slash---|Math|IsFloatInRange")
+	static bool IsFloatInRange(float Value, float Min, float Max, bool bInclusiveMin = true, bool bInclusiveMax = true);
 
 	
 };

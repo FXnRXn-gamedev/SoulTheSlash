@@ -16,6 +16,9 @@ class USlashCharacteAnimInstanceBase;
 class UAnimMontage;
 class ASlashEquippableItemMaster;
 
+
+
+
 UENUM(BlueprintType)
 enum class ECharacterState : uint8
 {
@@ -71,10 +74,21 @@ struct FEquippableStruct
 	EEquipHandEnum EquipHand;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Setting")
-	TSubclassOf<AActor> ActorRef;
+	AActor* ActorRef;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Setting")
 	bool Equipped;
+};
+
+UENUM(BlueprintType)
+enum class EquipUnEquipMantageState : uint8
+{
+	EquipPrimaryMontage			UMETA(DisplayName = "EquipPrimaryMontage"),
+	EquipSecondaryMontage		UMETA(DisplayName = "EquipSecondaryMontage"),
+	EquipPalceholder1Montage	UMETA(DisplayName = "EquipPalceholder1Montage"),
+	UnequipPrimaryMontage		UMETA(DisplayName = "UnequipPrimaryMontage"),
+	UnequipSecondaryMontage		UMETA(DisplayName = "UnequipSecondaryMontage"),
+	UnequipPalceholder1Montage	UMETA(DisplayName = "UnequipPalceholder1Montage")
 };
 
 
@@ -247,7 +261,26 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl")
 	float CrawlSpeed = 100.0f;
 
-#pragma endregion 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl|Montage")
+	UAnimMontage* CrawlRotateRightAnimMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl|Montage")
+	UAnimMontage* CrawlRotateLeftAnimMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Crawl|Montage")
+	UAnimMontage* CrawlToStandtAnimMontage;
+
+	UPROPERTY()
+	bool bHasExecutedOnce = true;
+
+#pragma endregion
+
+	UPROPERTY()
+	EItemTypeEnum CurrentEquippingItemType;
+
+	bool bIsPrimaryItemEquipped;
+	bool bIsSecondaryItemEquipped;
+	bool bIsPlaceholder1ItemEquipped;
 
 public:
 	// Movement
@@ -261,17 +294,31 @@ public:
 	void PerformRoll();
 	void EndRoll();
 	void ToggleCrawlMode();
+	void CheckIfCrawlMode();
 
 protected:
 	// Equip/Unequip
 	void InitializeEquippables();
-	void AttachItemUnequipped(FEquippableStruct EquippableStruct, AActor* Actor);
+	void AttachItemSocket(FEquippableStruct EquippableStruct, AActor* Actor);
 	UAnimMontage* GetEquipMontage(FEquippableStruct EquippableStruct);
 	UAnimMontage* GetUnequipMontage(FEquippableStruct EquippableStruct);
 	void SetEquipStatus(EItemTypeEnum ItemType, bool bEquipped);
+	void EquipItem(EItemTypeEnum ItemType);
+	void UnequipItem(EItemTypeEnum ItemType);
+	void EquipUnequipItem(EItemTypeEnum ItemType);
+
+
+
+	UFUNCTION()
+	void OnEquipNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& BranchingPointNotifyPayload);
+
+	UFUNCTION()
+	void OnUnequipNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& BranchingPointNotifyPayload);
 
 	// Crawl
 	void OnCrawlDelayCompleted();
+	void ResetDoOnce();
+	void PlayCrawlMontage();
 	
 	// Create and setup widget
 	void SetupPlayerWidget();
@@ -300,3 +347,5 @@ public:
 	void HandleNotify_FallLand();
 	
 };
+
+

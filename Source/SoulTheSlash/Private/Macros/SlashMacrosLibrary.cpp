@@ -28,3 +28,10 @@ void USlashMacrosLibrary::Gate(bool bCondition, bool& bIsGateOpen)
 	bIsGateOpen = bCondition;
 }
 
+bool USlashMacrosLibrary::IsFloatInRange(float Value, float Min, float Max, bool bInclusiveMin, bool bInclusiveMax)
+{
+	bool bGreaterThanMin = bInclusiveMin ? (Value >= Min) : (Value > Min);
+	bool bLessThanMax = bInclusiveMax ? (Value <= Max) : (Value < Max);
+
+	return bGreaterThanMin && bLessThanMax;
+}

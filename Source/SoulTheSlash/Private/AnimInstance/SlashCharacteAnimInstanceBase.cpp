@@ -44,10 +44,6 @@ void USlashCharacteAnimInstanceBase::NativeThreadSafeUpdateAnimation(float Delta
 
 		// Player Current Speed
 		Speed = FVector(Velocity.X, Velocity.Y, 0.f).Size();
-
-		//
-		
-		
 	}
 
 	if (OwnerMovementComp)
@@ -83,7 +79,12 @@ void USlashCharacteAnimInstanceBase::UpdateVelocityData()
 		{
 			LocalVelocityDirection = EAnimCardinalDirection::Forward;
 		}
+		
+		FwdBwdDirection = FVector::DotProduct(OwnerCharacter->GetVelocity(), OwnerCharacter->GetActorForwardVector());
 	}
+
+	InterpDirection = FMath::FInterpTo(InterpDirection, DirectionAngle, GetWorld()->GetDeltaSeconds(), 2.0f);
+	
 }
 
 void USlashCharacteAnimInstanceBase::UpdateCharacterMovementData()
@@ -92,6 +93,7 @@ void USlashCharacteAnimInstanceBase::UpdateCharacterMovementData()
 	
 	IsSprinting = OwnerCharacter->bIsSprinting;
 	IsCrouching = OwnerCharacter->bIsCrouching;
+	CrawlMode = OwnerCharacter->bCrawlMode;
 	IsJumping = false;
 	IsFalling = false;
 	if (OwnerMovementComp)
