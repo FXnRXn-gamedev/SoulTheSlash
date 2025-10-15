@@ -94,6 +94,8 @@ void USlashCharacteAnimInstanceBase::UpdateCharacterMovementData()
 	IsSprinting = OwnerCharacter->bIsSprinting;
 	IsCrouching = OwnerCharacter->bIsCrouching;
 	CrawlMode = OwnerCharacter->bCrawlMode;
+	CanWalkOnBeam = OwnerCharacter->bCanWalkOnBeam;
+	IsWalkingOnBeam = OwnerCharacter->bIsWalkingOnBeam;
 	IsJumping = false;
 	IsFalling = false;
 	if (OwnerMovementComp)
@@ -108,6 +110,11 @@ void USlashCharacteAnimInstanceBase::UpdateCharacterMovementData()
 			IsFalling = true;
 		}
 		//GroundDistance = OwnerMovementComp->CurrentFloor.FloorDist;
+	}
+
+	if (OwnerCharacter->bIsWalkingOnBeam && !bIsJumping == false)
+	{
+		OwnerCharacter->bIsWalkingOnBeam = false;
 	}
 	
 }

@@ -16,6 +16,7 @@
 #include "DrawDebugHelpers.h"
 #include "KismetAnimationLibrary.h"
 #include "Component/StateComponent.h"
+#include "Item/BeamActor.h"
 #include "Item/SlashEquippableItemMaster.h"
 #include "Macros/SlashMacrosLibrary.h"
 
@@ -91,6 +92,10 @@ void ASlashPlayerCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	CheckIfCrawlMode();
+	if (bCanWalkOnBeam)
+	{
+		CheckForBeamBelow();
+	}
 	
 	
 	// if (GEngine)
@@ -141,6 +146,10 @@ void ASlashPlayerCharacter::Tick(float DeltaSeconds)
 	{
 		GetCharacterMovement()->MaxWalkSpeedCrouched = CrawlSpeed;
 	}
+	else if (bIsWalkingOnBeam)
+	{
+		GetCharacterMovement()->MaxWalkSpeed = BeamWalkSpeed;
+	}
 	else
 	{
 		GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
@@ -149,6 +158,12 @@ void ASlashPlayerCharacter::Tick(float DeltaSeconds)
 
 	FindOutGroundDistance();
 	
+}
+
+void ASlashPlayerCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+	bCanWalkOnBeam = true;
 }
 
 #pragma endregion 
@@ -204,6 +219,7 @@ void ASlashPlayerCharacter::StartJump()
 {
 	SetCharacterState(ECharacterState::Jumping);
 	Jump();
+	bCanWalkOnBeam = false;
 }
 
 void ASlashPlayerCharacter::StopJump()
@@ -516,6 +532,56 @@ void ASlashPlayerCharacter::OnCrawlDelayCompleted()
 }
 
 #pragma endregion
+
+#pragma region Beam Walk
+
+void ASlashPlayerCharacter::CheckForBeamBelow()
+{
+	if (IsValid(GetMesh()))
+	{
+		FVector TraceStart = GetMesh()->GetComponentLocation();
+		FVector TraceEnd = TraceStart;
+
+		FHitResult OutHit;
+		const TArray<AActor*> ActorsToIgnore = { this };
+		
+		bool bHitDetected = UKismetSystemLibrary::CapsuleTraceSingleForObjects(
+				GetWorld(),
+				TraceStart,
+				TraceEnd,
+				15.0f, // Radius
+				33.0f, // Half Height
+				ObjectTypes,
+				false, // bTraceComplex
+				ActorsToIgnore,
+				DrawDebugType,
+				OutHit,
+				true // bIgnoreSelf
+				
+			);
+		// FLinearColor::White,
+		// 		FLinearColor::Green,
+		// 		5.0f // Draw Time
+		
+
+		if (bHitDetected && OutHit.GetActor())
+		{
+			// Check if the hit actor has the "Beam" tag
+			if (OutHit.GetActor()->ActorHasTag(FName("Beam")))
+			{
+				bIsWalkingOnBeam = true;
+			}
+			else
+			{
+				bIsWalkingOnBeam = false;
+			}
+		}
+	}
+	
+}
+
+
+#pragma endregion 
 
 #pragma region Equip/Unequip
 
@@ -971,6 +1037,8 @@ void ASlashPlayerCharacter::OnUnequipNotifyBegin(FName NotifyName,
 	UnequipItem(CurrentEquippingItemType);
 }
 
+
+
 void ASlashPlayerCharacter::SetEquipStatus(EItemTypeEnum ItemType, bool bEquipped)
 {
 	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
@@ -1117,7 +1185,7 @@ void ASlashPlayerCharacter::FindOutGroundDistance()
 		}
 	}
 
-	if (bIsDebug)
+	if (false)
 	{
 		// Optional: Draw debug sphere
 		DrawDebugSphere(

@@ -80,6 +80,12 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
 	bool CrawlMode;
 
+	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
+	bool CanWalkOnBeam;
+
+	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
+	bool IsWalkingOnBeam;
+
 	// Jumping
 	UPROPERTY(BlueprintReadOnly, Category= "---Slash---|AnimInstance",meta=(BlueprintThreadSafe))
 	bool IsJumping;

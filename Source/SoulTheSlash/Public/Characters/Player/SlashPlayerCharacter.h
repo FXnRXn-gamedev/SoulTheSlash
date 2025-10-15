@@ -6,6 +6,7 @@
 #include "Characters/SlashCharacterBase.h"
 #include "InputActionValue.h"
 #include "Controller/SlashPlayerController.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "SlashPlayerCharacter.generated.h"
 
 class USpringArmComponent;
@@ -101,6 +102,13 @@ public:
 	ASlashPlayerCharacter();
 
 	// Public Properties
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|BeamTraversal")
+	bool bCanWalkOnBeam;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|BeamTraversal")
+	bool bIsWalkingOnBeam;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|EquippableData")
 	TMap<EItemTypeEnum, FEquippableStruct> EquippableSetup;
 
@@ -128,6 +136,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void Landed(const FHitResult& Hit) override;
 
 #pragma region Setting
 	
@@ -275,6 +284,19 @@ protected:
 
 #pragma endregion
 
+#pragma region BeamWalk
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|BeamTraversal")
+	float BeamWalkSpeed = 25.0f;
+	
+	// Corresponds to the "Object Types" array variable
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|BeamTraversal|Trace Settings")
+	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+
+	// Corresponds to the "Draw Debug Type" enum variable
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|BeamTraversal|Trace Settings")
+	TEnumAsByte<EDrawDebugTrace::Type> DrawDebugType;
+#pragma endregion 
+
 	UPROPERTY()
 	EItemTypeEnum CurrentEquippingItemType;
 
@@ -314,6 +336,9 @@ protected:
 
 	UFUNCTION()
 	void OnUnequipNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& BranchingPointNotifyPayload);
+
+	// Beam Walk
+	void CheckForBeamBelow();
 
 	// Crawl
 	void OnCrawlDelayCompleted();
