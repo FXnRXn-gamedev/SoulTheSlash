@@ -15,6 +15,7 @@
 #include "Widgets/SlashPlayerStatWidget.h"
 #include "DrawDebugHelpers.h"
 #include "KismetAnimationLibrary.h"
+#include "Component/PlayerCombatComponent.h"
 #include "Component/StateComponent.h"
 #include "Item/BeamActor.h"
 #include "Item/SlashEquippableItemMaster.h"
@@ -32,6 +33,9 @@ ASlashPlayerCharacter::ASlashPlayerCharacter()
 	bUseControllerRotationYaw = false;
 
 	// Create combat component
+	PlayerCombatComponent = CreateDefaultSubobject<UPlayerCombatComponent>(TEXT("PlayerCombatComponent"));
+
+	// Create Stat component
 	StatComponent = CreateDefaultSubobject<UPlayerStatComponent>(TEXT("StatComponent"));
 
 	// Create state component
@@ -66,6 +70,8 @@ ASlashPlayerCharacter::ASlashPlayerCharacter()
 	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
 }
 
+
+
 void ASlashPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
@@ -84,7 +90,6 @@ void ASlashPlayerCharacter::BeginPlay()
 	}
 
 	// Initialize equippable items
-	InitializeEquippables();
 }
 
 void ASlashPlayerCharacter::Tick(float DeltaSeconds)
@@ -554,7 +559,7 @@ void ASlashPlayerCharacter::CheckForBeamBelow()
 				ObjectTypes,
 				false, // bTraceComplex
 				ActorsToIgnore,
-				DrawDebugType,
+				EDrawDebugTrace::None,
 				OutHit,
 				true // bIgnoreSelf
 				
@@ -584,94 +589,6 @@ void ASlashPlayerCharacter::CheckForBeamBelow()
 #pragma endregion 
 
 #pragma region Equip/Unequip
-
-void ASlashPlayerCharacter::InitializeEquippables()
-{
-	
-	// Create a copy of the setup to avoid modifying while iterating
-	TMap<EItemTypeEnum, FEquippableStruct> OriginalSetup = EquippableSetup;
-
-	// Clear the original map to rebuild it with spawned items
-	EquippableSetup.Empty();
-	for (const auto& element : OriginalSetup)
-	{
-		if (!element.Value.ItemActor || !GetWorld())
-		{
-			// Keep the original entry if no ItemActor or no World
-			EquippableSetup.Add(element.Key, element.Value);
-			continue;
-		}
-
-		// Spawn Item
-		FVector SpawnLocation = FVector::ZeroVector;
-		FRotator SpawnRotation = FRotator::ZeroRotator;
-        
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		ASlashEquippableItemMaster* SpawnedItem = GetWorld()->SpawnActor<ASlashEquippableItemMaster>(
-			element.Value.ItemActor, SpawnLocation, SpawnRotation, SpawnParams);
-
-		if (SpawnedItem)
-		{
-			FEquippableStruct NewEquippable;
-			NewEquippable.ItemActor = element.Value.ItemActor;
-			NewEquippable.AttachSocket = element.Value.AttachSocket;
-			NewEquippable.EquipHand = element.Value.EquipHand;
-			NewEquippable.ActorRef = SpawnedItem;  // Store the actual actor instance, not the class
-			NewEquippable.Equipped = element.Value.Equipped;
-
-			EquippableSetup.Add(element.Key, NewEquippable);
-
-			// Attach Item if needed
-			if (!NewEquippable.Equipped)
-			{
-				AttachItemSocket(NewEquippable, SpawnedItem);
-			}
-		}
-		else
-		{
-			// If spawning failed, keep the original entry
-			EquippableSetup.Add(element.Key, element.Value);
-			UE_LOG(LogTemp, Warning, TEXT("Failed to spawn equippable item for key: %d"), (int32)element.Key);
-		}
-
-	}
-}
-
-void ASlashPlayerCharacter::AttachItemSocket(FEquippableStruct EquippableStruct, AActor* Actor)
-{
-	// This switch block is the C++ equivalent of the "Switch on Socket_Enum" node
-	FName SocketToAttachTo;
-
-	// Set up the attachment rules, matching the pins on the Blueprint node
-	const FAttachmentTransformRules AttachmentRules
-	(
-		EAttachmentRule::SnapToTarget, // Location Rule
-		EAttachmentRule::SnapToTarget, // Rotation Rule
-		EAttachmentRule::KeepRelative, // Scale Rule
-		true                           // bWeldSimulatedBodies
-	);
-	
-	switch (EquippableStruct.AttachSocket)
-	{
-	case ESocketEnum::WeaponBowBack_Socket:
-		SocketToAttachTo = FName("WeaponBowBack_Socket");
-		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
-		break;
-	case ESocketEnum::WeaponCrossbowBack_Socket:
-		SocketToAttachTo = FName("WeaponCrossbowBack_Socket");
-		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
-		break;
-	case ESocketEnum::WeaponSword_Socket:
-		SocketToAttachTo = FName("WeaponSword_Socket");
-		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
-		break;
-	case ESocketEnum::WeaponKnife_Socket:
-		SocketToAttachTo = FName("WeaponKnife_Socket");
-		Actor->AttachToComponent(GetMesh(), AttachmentRules, SocketToAttachTo);
-		break;
-	}
-}
 
 UAnimMontage* ASlashPlayerCharacter::GetEquipMontage(FEquippableStruct EquippableStruct)
 {
@@ -713,7 +630,7 @@ UAnimMontage* ASlashPlayerCharacter::GetUnequipMontage(FEquippableStruct Equippa
 
 
 
-void ASlashPlayerCharacter::EquipItem(EItemTypeEnum ItemType)
+void ASlashPlayerCharacter::EquipItem(EWeaponStateTypeEnum ItemType)
 {
 	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
 
@@ -752,26 +669,26 @@ void ASlashPlayerCharacter::EquipItem(EItemTypeEnum ItemType)
 	}
 }
 
-void ASlashPlayerCharacter::UnequipItem(EItemTypeEnum ItemType)
+void ASlashPlayerCharacter::UnequipItem(EWeaponStateTypeEnum ItemType)
 {
 	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
 	if (FoundItem)
 	{
-		AttachItemSocket(*FoundItem, FoundItem->ActorRef);
+		//AttachItemSocket(*FoundItem, FoundItem->ActorRef);
 		SetEquipStatus(ItemType, false);
 	}
 }
 
-void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
+void ASlashPlayerCharacter::EquipUnequipItem(EWeaponStateTypeEnum ItemType)
 {
 	// Set the current equipping item type
 	CurrentEquippingItemType = ItemType;
 
 	
 	
-	FEquippableStruct* PrimaryItem = EquippableSetup.Find(EItemTypeEnum::Primary);
-	FEquippableStruct* SecondaryItem = EquippableSetup.Find(EItemTypeEnum::Secondary);
-	FEquippableStruct* Placeholder1Item = EquippableSetup.Find(EItemTypeEnum::Placeholder1);
+	FEquippableStruct* PrimaryItem = EquippableSetup.Find(EWeaponStateTypeEnum::Primary);
+	FEquippableStruct* SecondaryItem = EquippableSetup.Find(EWeaponStateTypeEnum::Secondary);
+	FEquippableStruct* Placeholder1Item = EquippableSetup.Find(EWeaponStateTypeEnum::Placeholder1);
 	bIsPrimaryItemEquipped = (PrimaryItem->EquipHand == SecondaryItem->EquipHand && PrimaryItem->EquipHand == Placeholder1Item->EquipHand) && PrimaryItem->Equipped ;
 	bIsSecondaryItemEquipped = (SecondaryItem->EquipHand == PrimaryItem->EquipHand && SecondaryItem->EquipHand == Placeholder1Item->EquipHand) && SecondaryItem->Equipped ;
 	bIsPlaceholder1ItemEquipped = (Placeholder1Item->EquipHand == PrimaryItem->EquipHand && Placeholder1Item->EquipHand == SecondaryItem->EquipHand) && Placeholder1Item->Equipped ;
@@ -785,14 +702,14 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 		{
 			switch (ItemType)
 			{
-			case EItemTypeEnum::Primary:
+			case EWeaponStateTypeEnum::Primary:
 				if (bIsPrimaryItemEquipped)
 				{
 					UAnimMontage* UnequipSecondaryMontage			= GetUnequipMontage(*SecondaryItem);
 					if (UnequipSecondaryMontage && PlayerAnimInstance)
 					{
 						PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage, 1.75f);
-						CurrentEquippingItemType = EItemTypeEnum::Secondary;
+						CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
 						// Bind a delegate to the montage end event if needed
 						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
 						
@@ -808,7 +725,7 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 								if (UnequipPalceholder1Montage && PlayerAnimInstance)
 								{
 									PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage, 1.75f);
-									CurrentEquippingItemType = EItemTypeEnum::Placeholder1;
+									CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
 									// Bind a delegate to the montage end event if needed
 									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
 									FOnMontageEnded MontageEndedDelegate;
@@ -822,7 +739,7 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 											if (EquipPrimaryMontage && PlayerAnimInstance)
 											{
 												PlayerAnimInstance->Montage_Play(EquipPrimaryMontage, 1.75f);
-												CurrentEquippingItemType = EItemTypeEnum::Primary;
+												CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
 												// Bind a delegate to the montage end event if needed
 												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
 											}
@@ -863,14 +780,14 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 					
 				}
 				break;
-			case EItemTypeEnum::Secondary:
+			case EWeaponStateTypeEnum::Secondary:
 				if (bIsSecondaryItemEquipped)
 				{
 					UAnimMontage* UnequipPrimaryMontage				= GetUnequipMontage(*PrimaryItem);
 					if (UnequipPrimaryMontage && PlayerAnimInstance)
 					{
 						PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
-						CurrentEquippingItemType = EItemTypeEnum::Primary;
+						CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
 						// Bind a delegate to the montage end event if needed
 						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
 						FOnMontageEnded MontageEndedDelegate;
@@ -884,7 +801,7 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 								if (UnequipPalceholder1Montage && PlayerAnimInstance)
 								{
 									PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage, 1.75f);
-									CurrentEquippingItemType = EItemTypeEnum::Placeholder1;
+									CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
 									// Bind a delegate to the montage end event if needed
 									FOnMontageEnded MontageEndedDelegate;
 									MontageEndedDelegate.BindLambda([this, SecondaryItem](UAnimMontage* Montage, bool bInterrupted)
@@ -897,7 +814,7 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 											if (EquipSecondaryMontage && PlayerAnimInstance)
 											{
 												PlayerAnimInstance->Montage_Play(EquipSecondaryMontage, 1.75f);
-												CurrentEquippingItemType = EItemTypeEnum::Secondary;
+												CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
 												// Bind a delegate to the montage end event if needed
 												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
 											}
@@ -940,14 +857,14 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 					}
 				}
 				break;
-			case EItemTypeEnum::Placeholder1:
+			case EWeaponStateTypeEnum::Placeholder1:
 				if (bIsPlaceholder1ItemEquipped)
 				{
 					UAnimMontage* UnequipPrimaryMontage				= GetUnequipMontage(*PrimaryItem);
 					if (UnequipPrimaryMontage && PlayerAnimInstance)
 					{
 						PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
-						CurrentEquippingItemType = EItemTypeEnum::Primary;
+						CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
 						// Bind a delegate to the montage end event if needed
 						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
 						FOnMontageEnded MontageEndedDelegate;
@@ -961,7 +878,7 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 								if (UnequipSecondaryMontage && PlayerAnimInstance)
 								{
 									PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage, 1.75f);
-									CurrentEquippingItemType = EItemTypeEnum::Secondary;
+									CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
 									// Bind a delegate to the montage end event if needed
 									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
 									FOnMontageEnded MontageEndedDelegate;
@@ -975,7 +892,7 @@ void ASlashPlayerCharacter::EquipUnequipItem(EItemTypeEnum ItemType)
 											if (EquipPalceholder1Montage && PlayerAnimInstance)
 											{
 												PlayerAnimInstance->Montage_Play(EquipPalceholder1Montage, 1.75f);
-												CurrentEquippingItemType = EItemTypeEnum::Placeholder1;
+												CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
 												// Bind a delegate to the montage end event if needed
 												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
 											}
@@ -1039,7 +956,7 @@ void ASlashPlayerCharacter::OnUnequipNotifyBegin(FName NotifyName,
 
 
 
-void ASlashPlayerCharacter::SetEquipStatus(EItemTypeEnum ItemType, bool bEquipped)
+void ASlashPlayerCharacter::SetEquipStatus(EWeaponStateTypeEnum ItemType, bool bEquipped)
 {
 	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
 	if (FoundItem)
@@ -1243,6 +1160,53 @@ void ASlashPlayerCharacter::GetActionKeyName(const UInputAction* InputAction)
 			}
 		}
 	}
+}
+
+void ASlashPlayerCharacter::ProcessInteraction()
+{
+	if (GetWorld() && IsValid(GetMesh()))
+	{
+		FVector TraceStart = GetMesh()->GetComponentLocation() + FVector(0.0f, 0.0f, 50.0f);
+		FVector TraceEnd = TraceStart;
+
+		TArray<FHitResult> OutHitResult;
+		const TArray<AActor*> ActorsToIgnore = { this };
+		TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypesArray;
+		ObjectTypesArray.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_WorldStatic));
+		
+		bool bHitDetect = UKismetSystemLibrary::SphereTraceMultiForObjects(
+				GetWorld(),
+				TraceStart,
+				TraceEnd,
+				160.0f, // Radius
+				ObjectTypesArray,
+				false, // bTraceComplex
+				ActorsToIgnore,
+				EDrawDebugTrace::None,
+				OutHitResult,
+				true, // bIgnoreSelf
+				FLinearColor::White,
+				FLinearColor::Green,
+				5.0f // Draw Time
+			);
+		
+
+		if (bHitDetect)
+		{
+			for (FHitResult HitResult : OutHitResult)
+			{
+				ASlashEquippableItemMaster* HitActor = Cast<ASlashEquippableItemMaster>(HitResult.GetActor());
+				if (HitActor)
+				{
+					if (HitActor->Implements<UInteractInterface>())
+					{
+						IInteractInterface::Execute_Interact(HitActor, this);
+					}
+				}
+			}
+		}
+	}
+	
 }
 
 

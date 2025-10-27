@@ -32,6 +32,9 @@ protected:
 	UInputMappingContext* DefaultMappingContext;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
+	UInputAction* InteractAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
 	UInputAction* MoveAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
@@ -83,8 +86,8 @@ private:
 	void CrouchInput();
 	void RollStartedInput();
 	void CrawlInput();
-	void CrawlStarted();
-	void CrawlStopped();
+	void InteractInput();
+
 
 	// Reference to controlled character
 	UPROPERTY()

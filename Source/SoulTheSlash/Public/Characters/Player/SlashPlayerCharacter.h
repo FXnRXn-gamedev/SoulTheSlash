@@ -6,6 +6,7 @@
 #include "Characters/SlashCharacterBase.h"
 #include "InputActionValue.h"
 #include "Controller/SlashPlayerController.h"
+#include "Data/Enums/SoulPlayerEnum.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "SlashPlayerCharacter.generated.h"
 
@@ -20,64 +21,28 @@ class ASlashEquippableItemMaster;
 
 
 
-UENUM(BlueprintType)
-enum class ECharacterState : uint8
-{
-	Idle,
-	Moving,
-	Jumping,
-	Crouching,
-	Rolling,
-	Dodging,
-	Attacking,
-	Blocking,
-	Hit,
-	Dead
-};
-
-UENUM(BlueprintType)
-enum class EItemTypeEnum : uint8
-{
-	Primary			UMETA(DisplayName = "Primary"),
-	Secondary		UMETA(DisplayName = "Secondary"),
-	Placeholder1	UMETA(DisplayName = "Placeholder1")
-	
-};
-
-UENUM(BlueprintType)
-enum class ESocketEnum : uint8
-{
-	WeaponBowBack_Socket		UMETA(DisplayName = "WeaponBowBack_Socket"),
-	WeaponCrossbowBack_Socket	UMETA(DisplayName = "WeaponCrossbowBack_Socket"),
-	WeaponSword_Socket			UMETA(DisplayName = "WeaponSword_Socket"),
-	WeaponKnife_Socket			UMETA(DisplayName = "WeaponKnife_Socket")
-};
-
-UENUM(BlueprintType)
-enum class EEquipHandEnum : uint8
-{
-	HoldItem_Sword_r			UMETA(DisplayName = "HoldItem_Sword_r"),
-	HoldItem_Bow_l				UMETA(DisplayName = "HoldItem_Bow_l")
-};
 
 USTRUCT(BlueprintType)
 struct FEquippableStruct
 {
 	GENERATED_BODY()
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Setting")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
+	EWeaponTypeEnum WeaponType;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
 	TSubclassOf<ASlashEquippableItemMaster> ItemActor;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Setting")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
 	ESocketEnum AttachSocket;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Setting")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
 	EEquipHandEnum EquipHand;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Setting")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
 	AActor* ActorRef;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Setting")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
 	bool Equipped;
 };
 
@@ -110,7 +75,7 @@ public:
 	bool bIsWalkingOnBeam;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|EquippableData")
-	TMap<EItemTypeEnum, FEquippableStruct> EquippableSetup;
+	TMap<EWeaponStateTypeEnum, FEquippableStruct> EquippableSetup;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Crawl")
 	bool bCrawlMode = false;
@@ -182,6 +147,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "---Slash---|Component")
 	class UStateComponent* StateComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "---Slash---|Component")
+	class UPlayerCombatComponent* PlayerCombatComponent;
 	
 	UPROPERTY(EditDefaultsOnly, Category = "---Slash---|UI")
 	TSubclassOf<USlashPlayerStatWidget> PlayerStatWidgetClass;
@@ -298,7 +266,7 @@ protected:
 #pragma endregion 
 
 	UPROPERTY()
-	EItemTypeEnum CurrentEquippingItemType;
+	EWeaponStateTypeEnum CurrentEquippingItemType;
 
 	bool bIsPrimaryItemEquipped;
 	bool bIsSecondaryItemEquipped;
@@ -320,14 +288,12 @@ public:
 
 protected:
 	// Equip/Unequip
-	void InitializeEquippables();
-	void AttachItemSocket(FEquippableStruct EquippableStruct, AActor* Actor);
 	UAnimMontage* GetEquipMontage(FEquippableStruct EquippableStruct);
 	UAnimMontage* GetUnequipMontage(FEquippableStruct EquippableStruct);
-	void SetEquipStatus(EItemTypeEnum ItemType, bool bEquipped);
-	void EquipItem(EItemTypeEnum ItemType);
-	void UnequipItem(EItemTypeEnum ItemType);
-	void EquipUnequipItem(EItemTypeEnum ItemType);
+	void SetEquipStatus(EWeaponStateTypeEnum ItemType, bool bEquipped);
+	void EquipItem(EWeaponStateTypeEnum ItemType);
+	void UnequipItem(EWeaponStateTypeEnum ItemType);
+	void EquipUnequipItem(EWeaponStateTypeEnum ItemType);
 
 
 
@@ -366,6 +332,7 @@ protected:
 
 public:
 	void GetActionKeyName(const UInputAction* InputAction);
+	void ProcessInteraction();
 
 	// Anim Notify
 	void HandleNotify_CameraShake();

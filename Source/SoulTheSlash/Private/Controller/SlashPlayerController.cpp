@@ -74,6 +74,11 @@ void ASlashPlayerController::SetupInputComponent()
 			EnhancedInputComponent->BindAction(CrawlAction, ETriggerEvent::Started, this, &ASlashPlayerController::CrawlInput);
 		}
 
+		if (InteractAction)
+		{
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &ASlashPlayerController::InteractInput);
+		}
+
 
 		// EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::LightAttack);
 		// EnhancedInputComponent->BindAction(HeavyAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::HeavyAttack);
@@ -163,30 +168,16 @@ void ASlashPlayerController::CrawlInput()
 	{
 		SlashCharacter->ToggleCrawlMode();
 	}
-	// if (SlashCharacter && SlashCharacter->bCrawlMode)
-	// {
-	// 	CrawlStopped();
-	// }
-	// else
-	// {
-	// 	CrawlStarted();
-	// }
 }
 
-void ASlashPlayerController::CrawlStarted()
+void ASlashPlayerController::InteractInput()
 {
 	if (SlashCharacter)
 	{
-		SlashCharacter->ToggleCrawlMode();
+		SlashCharacter->ProcessInteraction();
 	}
 }
 
-void ASlashPlayerController::CrawlStopped()
-{
-	if (SlashCharacter)
-	{
-		SlashCharacter->ToggleCrawlMode();
-	}
-}
+
 
 
