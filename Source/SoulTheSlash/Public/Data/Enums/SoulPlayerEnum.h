@@ -85,7 +85,37 @@ enum class EEquipHandEnum : uint8
 	HoldItem_Bow_l				UMETA(DisplayName = "HoldItem_Bow_l")
 };
 
+UENUM()
+enum class EMontageAction
+{
+	MonatgeAction_None			UMETA(DisplayName = "Montage None"),
+	MontageAction_Equip			UMETA(DisplayName = "Montage Equip"),
+	MontageAction_Unequip		UMETA(DisplayName = "Montage Unequip")
+};
 
+USTRUCT(BlueprintType)
+struct FMontageActionStruct : public FTableRowBase
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere)
+	EMontageAction Action;
+	
+	UPROPERTY(EditAnywhere)
+	TMap<EWeaponTypeEnum, UAnimMontage*> Montages;
+	
+};
+
+// // Accessing the montages:
+// for (const FWeaponMontageMap& MontageMap : MontageRef)
+// {
+// 	for (const auto& Pair : MontageMap.Montages)
+// 	{
+// 		EWeaponTypeEnum WeaponType = Pair.Key;
+// 		UAnimMontage* Montage = Pair.Value;
+// 		// Use them...
+// 	}
+// }
 
 USTRUCT(BlueprintType)
 struct FEquippableStruct

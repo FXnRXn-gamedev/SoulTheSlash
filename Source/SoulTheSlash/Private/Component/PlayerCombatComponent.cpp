@@ -50,39 +50,53 @@ void UPlayerCombatComponent::SetWeapon(ASlashEquippableItemMaster* NewWeapon)
 	EWeaponTypeEnum NewWeaponType = NewWeapon->Weapon;
 	EWeaponStateTypeEnum NewWeaponStateType = GetWeaponStateTypeFromWeapon(NewWeaponType);
 	
-	// Check if we already have a weapon of this state type (Primary/Secondary/etc)
-	ASlashEquippableItemMaster* WeaponToDrop = nullptr;
-	int32 IndexToRemove = -1;
-	
-	for (int32 i = 0; i < CurrentAttachedWeaponData.Num(); ++i)
+	if (WeaponSwapBehavior == EWeaponSwapBehavior::WSB_DropToWorld)
 	{
-		if (CurrentAttachedWeaponData[i].WeaponStateType == NewWeaponStateType)
+		// Check if we already have a weapon of this state type (Primary/Secondary/etc)
+		ASlashEquippableItemMaster* WeaponToDrop = nullptr;
+		int32 IndexToRemove = -1;
+	
+		for (int32 i = 0; i < CurrentAttachedWeaponData.Num(); ++i)
 		{
-			// Found existing weapon of same state type - we'll drop this one
-			FEquippableStruct* ExistingWeaponStruct = WeaponEquippableSetup.Find(CurrentAttachedWeaponData[i].EquippableData.WeaponType);
-			if (ExistingWeaponStruct && ExistingWeaponStruct->ActorRef)
+			if (CurrentAttachedWeaponData[i].WeaponStateType == NewWeaponStateType)
 			{
-				WeaponToDrop = Cast<ASlashEquippableItemMaster>(ExistingWeaponStruct->ActorRef);
-				IndexToRemove = i;
+				// Found existing weapon of same state type - we'll drop this one
+				FEquippableStruct* ExistingWeaponStruct = WeaponEquippableSetup.Find(CurrentAttachedWeaponData[i].EquippableData.WeaponType);
+				if (ExistingWeaponStruct && ExistingWeaponStruct->ActorRef)
+				{
+					WeaponToDrop = Cast<ASlashEquippableItemMaster>(ExistingWeaponStruct->ActorRef);
+					IndexToRemove = i;
+				}
+				break;
 			}
-			break;
+		}
+	
+		// If we found a weapon to drop, drop it and remove from data
+		if (WeaponToDrop)
+		{
+			// FString Msg = FString::Printf(TEXT("Dropping equipped %s to pick up %s"), *WeaponToDrop->GetName(), *NewWeapon->GetName());
+			// Soul_DebugHelper::DebugPrint(Msg);
+		
+			DropWeapon(WeaponToDrop);
+		
+			// Remove from internal data
+			if (IndexToRemove >= 0)
+			{
+				CurrentAttachedWeaponData.RemoveAt(IndexToRemove);
+			}
+		
 		}
 	}
-	
-	// If we found a weapon to drop, drop it and remove from data
-	if (WeaponToDrop)
+	else 
 	{
-		// FString Msg = FString::Printf(TEXT("Dropping equipped %s to pick up %s"), *WeaponToDrop->GetName(), *NewWeapon->GetName());
-		// Soul_DebugHelper::DebugPrint(Msg);
-		
-		DropWeapon(WeaponToDrop);
-		
-		// Remove from internal data
-		if (IndexToRemove >= 0)
+		if (WeaponSwapBehavior == EWeaponSwapBehavior::WSB_AddToInventory)
 		{
-			CurrentAttachedWeaponData.RemoveAt(IndexToRemove);
+			
 		}
-		
+		else if (WeaponSwapBehavior == EWeaponSwapBehavior::WSB_Reject)
+		{
+			
+		}
 	}
 	
 	// No conflict - attach the new weapon
@@ -263,17 +277,12 @@ void UPlayerCombatComponent::AttachItemSocket(FEquippableStruct EquippableStruct
 	Actor->AttachToComponent(Mesh, AttachmentRules, SocketToAttachTo);
 }
 
-
-
-
-
-
 void UPlayerCombatComponent::AttachWeaponInternalInfo(ASlashEquippableItemMaster* Weapon, EWeaponEquipSource Source)
 {
 	if (!Weapon) return;
 	
 	CurrentAttachedWeapon = Weapon;
-	//UE_LOG(LogTemp, Warning, TEXT("AttachWeaponInternalInfo: CurrentAttachedWeapon set to %s"), *CurrentAttachedWeapon->GetName());
+	
 	// Create Wepaon Instance Data
 	FWeaponInstanceData WeaponInstanceData;
 	
@@ -328,6 +337,13 @@ EWeaponStateTypeEnum UPlayerCombatComponent::GetWeaponStateTypeFromWeapon(EWeapo
 	}
 	
 }
+
+
+
+
+
+
+
 
 void UPlayerCombatComponent::EquipWeapon(EWeaponTypeEnum ItemType)
 {
