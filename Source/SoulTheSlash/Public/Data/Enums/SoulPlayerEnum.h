@@ -6,6 +6,10 @@
 #include "Engine/UserDefinedEnum.h"
 #include "SoulPlayerEnum.generated.h"
 
+
+
+class ASlashEquippableItemMaster;
+
 UENUM(BlueprintType)
 enum class ECharacterState : uint8
 {
@@ -22,7 +26,28 @@ enum class ECharacterState : uint8
 	Dead 				UMETA(DisplayName = "Dead")
 };
 
+
+
+
 #pragma region Equippable Enum
+
+UENUM(BlueprintType)
+enum class EWeaponEquipSource : uint8
+{
+	WES_None			UMETA(DisplayName = "WES_None"),
+	WES_WorldPickup		UMETA(DisplayName = "Picked from World"),
+	WES_Inventory		UMETA(DisplayName = "Eqipped from Inventory"),
+	WES_Dropped			UMETA(DisplayName = "Dropeed to World")
+};
+
+
+UENUM(BlueprintType)
+enum class EWeaponSwapBehavior : uint8
+{
+	WSB_DropToWorld     UMETA(DisplayName = "Drop Current to World"),
+	WSB_AddToInventory  UMETA(DisplayName = "Add Current to Inventory"),
+	WSB_Reject          UMETA(DisplayName = "Cannot Pick Up")
+};
 
 UENUM(BlueprintType)
 enum class EWeaponTypeEnum : uint8
@@ -58,6 +83,64 @@ enum class EEquipHandEnum : uint8
 {
 	HoldItem_Sword_r			UMETA(DisplayName = "HoldItem_Sword_r"),
 	HoldItem_Bow_l				UMETA(DisplayName = "HoldItem_Bow_l")
+};
+
+
+
+USTRUCT(BlueprintType)
+struct FEquippableStruct
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EWeaponTypeEnum WeaponType;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TSubclassOf<ASlashEquippableItemMaster> ItemActor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	ESocketEnum AttachSocket;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EEquipHandEnum EquipHand;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	AActor* ActorRef;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool Equipped;
+};
+
+USTRUCT(BlueprintType)
+struct FWeaponInstanceData
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere)
+	EWeaponStateTypeEnum WeaponStateType;
+	
+	UPROPERTY(EditAnywhere)
+	FEquippableStruct EquippableData;
+	
+	UPROPERTY(EditAnywhere)
+	EWeaponEquipSource EquipSource;
+	
+	UPROPERTY(EditAnywhere)
+	FGuid WeaponInstanceID;
+	
+	UPROPERTY(EditAnywhere)
+	FTransform LastWorldTransform;
+	
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<ASlashEquippableItemMaster> WeaponClass;
+	
+	FWeaponInstanceData() : 
+	EquipSource(EWeaponEquipSource::WES_None), 
+	WeaponInstanceID(FGuid::NewGuid()), 
+	LastWorldTransform(FTransform::Identity), 
+	WeaponClass(nullptr){}
+	
+	
 };
 
 #pragma endregion 

@@ -22,29 +22,29 @@ class ASlashEquippableItemMaster;
 
 
 
-USTRUCT(BlueprintType)
-struct FEquippableStruct
-{
-	GENERATED_BODY()
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
-	EWeaponTypeEnum WeaponType;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
-	TSubclassOf<ASlashEquippableItemMaster> ItemActor;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
-	ESocketEnum AttachSocket;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
-	EEquipHandEnum EquipHand;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
-	AActor* ActorRef;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|Weapon Setting")
-	bool Equipped;
-};
+// USTRUCT(BlueprintType)
+// struct FEquippableStruct
+// {
+// 	GENERATED_BODY()
+// 	
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	EWeaponTypeEnum WeaponType;
+// 	
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	TSubclassOf<ASlashEquippableItemMaster> ItemActor;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	ESocketEnum AttachSocket;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	EEquipHandEnum EquipHand;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	AActor* ActorRef;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	bool Equipped;
+// };
 
 UENUM(BlueprintType)
 enum class EquipUnEquipMantageState : uint8

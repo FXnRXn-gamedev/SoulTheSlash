@@ -11,29 +11,29 @@
 class ASlashEquippableItemMaster;
 
 
-USTRUCT(BlueprintType)
-struct FWeaponEquippableStruct
-{
-	GENERATED_BODY()
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	EWeaponTypeEnum WeaponType;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TSubclassOf<ASlashEquippableItemMaster> ItemActor;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	ESocketEnum AttachSocket;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	EEquipHandEnum EquipHand;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	AActor* ActorRef;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool Equipped;
-};
+// USTRUCT(BlueprintType)
+// struct FWeaponEquippableStruct
+// {
+// 	GENERATED_BODY()
+// 	
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	EWeaponTypeEnum WeaponType;
+// 	
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	TSubclassOf<ASlashEquippableItemMaster> ItemActor;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	ESocketEnum AttachSocket;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	EEquipHandEnum EquipHand;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	AActor* ActorRef;
+//
+// 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+// 	bool Equipped;
+// };
 
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
@@ -44,6 +44,7 @@ class SOULTHESLASH_API UPlayerCombatComponent : public UActorComponent
 	//------------------------------------------------------------------------------------------------------------------
 public:	
 	UPlayerCombatComponent();
+	
 
 #pragma region Public Equip/UnEquip Functions
 	
@@ -55,17 +56,17 @@ public:
 
 	
 	void AttachEquippableWeapon(EWeaponTypeEnum WeaponType);
-	void AttachItemSocket(FWeaponEquippableStruct EquippableStruct, AActor* Actor);
+	void AttachItemSocket(FEquippableStruct EquippableStruct, AActor* Actor);
 
 	void EquipWeapon(EWeaponTypeEnum ItemType);
 	void UnequipWeapon(EWeaponTypeEnum ItemType);
 	void SetEquipStatus(EWeaponTypeEnum ItemType, bool bEquipped);
 
 #pragma region Equippable
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|EquippableData")
-	TMap<EWeaponTypeEnum, FWeaponEquippableStruct> WeaponEquippableSetup;
+	UPROPERTY(EditAnywhere, Category = "---Slash---|EquippableData")
+	TMap<EWeaponTypeEnum, FEquippableStruct> WeaponEquippableSetup;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "---Slash---|EquippableData|Equippable")
+	UPROPERTY(EditAnywhere,  Category = "---Slash---|EquippableData|Equippable")
 	ASlashEquippableItemMaster* MainWeaponItem;
 
 #pragma endregion
@@ -104,23 +105,48 @@ public:
 
 #pragma endregion
 
-
+	UFUNCTION()
+	bool IsWeaponSlotEmpty() const { return CurrentAttachedWeapon == nullptr; }
+	
+	
+	
 	//------------------------------------------------------------------------------------------------------------------
 protected:
 	virtual void BeginPlay() override;
 	
-#pragma region Protected Equip/UnEquip Functions
-	
-	UAnimMontage* GetEquipMontage(FWeaponEquippableStruct EquippableStruct);
-	UAnimMontage* GetUnequipMontage(FWeaponEquippableStruct EquippableStruct);
-
-#pragma endregion
-	
 	// Reference to Owner Character
 	UPROPERTY()
 	ASlashPlayerCharacter* OwnerCharacter;
+	
+	UPROPERTY(VisibleAnywhere, Category = "---Slash---|CombatWeapon")
+	ASlashEquippableItemMaster* CurrentAttachedWeapon;
+	
+	UPROPERTY(VisibleAnywhere, Category = "---Slash---|CombatWeapon")
+	TArray<FWeaponInstanceData> CurrentAttachedWeaponData;
+	
+	UPROPERTY(EditAnywhere, Category = "---Slash---|CombatWeapon")
+	EWeaponSwapBehavior WeaponSwapBehavior = EWeaponSwapBehavior::WSB_DropToWorld;
+	
+	
+	
+	
+	void AttachWeaponInternalInfo(ASlashEquippableItemMaster* Weapon, EWeaponEquipSource Source);
+	EWeaponStateTypeEnum GetWeaponStateTypeFromWeapon(EWeaponTypeEnum WeaponType) const;
+	
+	
+	
+#pragma region Protected Equip/UnEquip Functions
+	
+	UAnimMontage* GetEquipMontage(FEquippableStruct EquippableStruct);
+	UAnimMontage* GetUnequipMontage(FEquippableStruct EquippableStruct);
+
+#pragma endregion
+	
+	
 
 		
 };
+
+
 
 

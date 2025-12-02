@@ -115,8 +115,6 @@ void ASlashEquippableItemMaster::CollectWeapon()
 
 		
 		CombatComponentRef->SetWeapon(this);
-		//AttachToPlayer();
-		CombatComponentRef->AttachEquippableWeapon(Weapon);
 	}
 	
 }
