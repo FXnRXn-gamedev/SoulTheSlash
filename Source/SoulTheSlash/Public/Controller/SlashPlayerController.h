@@ -72,6 +72,18 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
 	UInputAction* DashAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
+	UInputAction* PressedOneKeyAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
+	UInputAction* PressedTwoKeyAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
+	UInputAction* PressedThreeKeyAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "---Slash---|Input")
+	UInputAction* PressedTabKeyAction;
 
 #pragma endregion
 	
@@ -87,6 +99,10 @@ private:
 	void RollStartedInput();
 	void CrawlInput();
 	void InteractInput();
+	void HandlePressedOneKeyInput();
+	void HandlePressedTwoKeyInput();
+	void HandlePressedThreeKeyInput();
+	void HandlePressedTabKeyInput();
 
 
 	// Reference to controlled character

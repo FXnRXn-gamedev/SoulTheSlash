@@ -78,7 +78,29 @@ void ASlashPlayerController::SetupInputComponent()
 		{
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &ASlashPlayerController::InteractInput);
 		}
-
+		
+		if (PressedOneKeyAction)
+		{
+			EnhancedInputComponent->BindAction(PressedOneKeyAction, ETriggerEvent::Started, this, &ThisClass::HandlePressedOneKeyInput);
+			
+		}
+		
+		if (PressedTwoKeyAction)
+		{
+			EnhancedInputComponent->BindAction(PressedTwoKeyAction, ETriggerEvent::Started, this, &ThisClass::HandlePressedTwoKeyInput);
+		}
+		
+		if (PressedThreeKeyAction)
+		{
+			EnhancedInputComponent->BindAction(PressedThreeKeyAction, ETriggerEvent::Started, this, &ThisClass::HandlePressedThreeKeyInput);
+		}
+		
+		if (PressedTabKeyAction)
+		{
+			EnhancedInputComponent->BindAction(PressedTabKeyAction, ETriggerEvent::Started, this, &ThisClass::HandlePressedTabKeyInput);
+		}
+		
+		
 
 		// EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::LightAttack);
 		// EnhancedInputComponent->BindAction(HeavyAttackAction, ETriggerEvent::Triggered, this, &AWukongHero::HeavyAttack);
@@ -176,6 +198,26 @@ void ASlashPlayerController::InteractInput()
 	{
 		SlashCharacter->ProcessInteraction();
 	}
+}
+
+void ASlashPlayerController::HandlePressedOneKeyInput()
+{
+	if (SlashCharacter) SlashCharacter->PrimaryWeaponInput();
+}
+
+void ASlashPlayerController::HandlePressedTwoKeyInput()
+{
+	if (SlashCharacter) SlashCharacter->SecondaryWeaponInput();
+}
+
+void ASlashPlayerController::HandlePressedThreeKeyInput()
+{
+	if (SlashCharacter) SlashCharacter->PlaceholderWeaponInput();
+}
+
+void ASlashPlayerController::HandlePressedTabKeyInput()
+{
+	if (SlashCharacter) SlashCharacter->ToggleWeaponInput();
 }
 
 

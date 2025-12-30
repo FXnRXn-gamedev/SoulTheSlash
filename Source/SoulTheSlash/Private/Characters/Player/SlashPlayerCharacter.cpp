@@ -1,1241 +1,1134 @@
 // FXnRXn copyright notice
 
-
 #include "Characters/Player/SlashPlayerCharacter.h"
-#include "GameFramework/CharacterMovementComponent.h"
-#include "EnhancedInputComponent.h"
-#include "EnhancedInputSubsystems.h"
 #include "AnimInstance/SlashCharacteAnimInstanceBase.h"
 #include "Camera/CameraComponent.h"
-#include "GameFramework/SpringArmComponent.h"
-#include "Component/PlayerStatComponent.h"
-#include "Components/CapsuleComponent.h"
-#include "Kismet/GameplayStatics.h"
-#include "Widgets/SlashPlayerHUDWidget.h"
-#include "Widgets/SlashPlayerStatWidget.h"
-#include "DrawDebugHelpers.h"
-#include "KismetAnimationLibrary.h"
 #include "Component/PlayerCombatComponent.h"
+#include "Component/PlayerStatComponent.h"
 #include "Component/StateComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "DrawDebugHelpers.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "Item/BeamActor.h"
 #include "Item/SlashEquippableItemMaster.h"
+#include "Kismet/GameplayStatics.h"
+#include "KismetAnimationLibrary.h"
 #include "Macros/SlashMacrosLibrary.h"
+#include "Soul_DebugHelper.h"
+#include "Widgets/SlashPlayerHUDWidget.h"
+#include "Widgets/SlashPlayerStatWidget.h"
 
+// ----------------------------------------------- Constructor
+// ---------------------------------------------------------
 
-#pragma region Unreal Engine Callbacks
+ASlashPlayerCharacter::ASlashPlayerCharacter() {
+  GetCapsuleComponent()->InitCapsuleSize(32.0f, 88.0f);
 
-ASlashPlayerCharacter::ASlashPlayerCharacter()
-{
-	GetCapsuleComponent()->InitCapsuleSize(32.0f, 88.0f);
+  bUseControllerRotationPitch = false;
+  bUseControllerRotationRoll = false;
+  bUseControllerRotationYaw = false;
 
-	bUseControllerRotationPitch = false;
-	bUseControllerRotationRoll = false;
-	bUseControllerRotationYaw = false;
+  // Create combat component
+  PlayerCombatComponent = CreateDefaultSubobject<UPlayerCombatComponent>(
+      TEXT("PlayerCombatComponent"));
 
-	// Create combat component
-	PlayerCombatComponent = CreateDefaultSubobject<UPlayerCombatComponent>(TEXT("PlayerCombatComponent"));
+  // Create Stat component
+  StatComponent =
+      CreateDefaultSubobject<UPlayerStatComponent>(TEXT("StatComponent"));
 
-	// Create Stat component
-	StatComponent = CreateDefaultSubobject<UPlayerStatComponent>(TEXT("StatComponent"));
+  // Create state component
+  StateComponent =
+      CreateDefaultSubobject<UStateComponent>(TEXT("StateComponent"));
 
-	// Create state component
-	StateComponent = CreateDefaultSubobject<UStateComponent>(TEXT("StateComponent"));
-	
-	// Create camera boom
-	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
-	SpringArm->SetupAttachment(GetMesh(), TEXT("spine_03")); //RootComponent
-	SpringArm->SocketOffset = FVector(0.0f, 0.0f, 65.0f);
-	SpringArm->TargetArmLength = 500.0f;
-	SpringArm->bUsePawnControlRotation = true;
-	SpringArm->bEnableCameraLag = true;
-	SpringArm->CameraLagSpeed = 50.0f;
+  // Create camera boom
+  SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
+  SpringArm->SetupAttachment(GetMesh(), TEXT("spine_03")); // RootComponent
+  SpringArm->SocketOffset = FVector(0.0f, 0.0f, 65.0f);
+  SpringArm->TargetArmLength = 500.0f;
+  SpringArm->bUsePawnControlRotation = true;
+  SpringArm->bEnableCameraLag = true;
+  SpringArm->CameraLagSpeed = 50.0f;
 
-	// Create follow camera
-	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
-	FollowCamera->bUsePawnControlRotation = false;
+  // Create follow camera
+  FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+  FollowCamera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
+  FollowCamera->bUsePawnControlRotation = false;
 
-	CurrentState = ECharacterState::Idle;
+  CurrentState = ECharacterState::Idle;
 
-	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->bUseControllerDesiredRotation = false;					
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 0.0f, 0.0f);
-	GetCharacterMovement()->JumpZVelocity = 500.0f;
-	GetCharacterMovement()->AirControl = 0.35f;
-	GetCharacterMovement()->MinAnalogWalkSpeed = 20.0f;
-	GetCharacterMovement()->BrakingDecelerationWalking = 800.0f;
-	GetCharacterMovement()->MaxAcceleration = 1250.0f;
-	GetCharacterMovement()->GravityScale = 1.25f;
-	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
+  // Configure character movement
+  GetCharacterMovement()->bOrientRotationToMovement = true;
+  GetCharacterMovement()->bUseControllerDesiredRotation = false;
+  GetCharacterMovement()->RotationRate = FRotator(0.0f, 0.0f, 0.0f);
+  GetCharacterMovement()->JumpZVelocity = 500.0f;
+  GetCharacterMovement()->AirControl = 0.35f;
+  GetCharacterMovement()->MinAnalogWalkSpeed = 20.0f;
+  GetCharacterMovement()->BrakingDecelerationWalking = 800.0f;
+  GetCharacterMovement()->MaxAcceleration = 1250.0f;
+  GetCharacterMovement()->GravityScale = 1.25f;
+  GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
 }
 
+// ------------------------------------------ Unreal Engine Callbacks
+// --------------------------------------------------
 
+void ASlashPlayerCharacter::BeginPlay() {
+  Super::BeginPlay();
 
-void ASlashPlayerCharacter::BeginPlay()
-{
-	Super::BeginPlay();
+  GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
 
-	GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+  // Create and setup widget
+  SetupPlayerWidget();
+  SetupPlayerAnimation();
 
-	// Create and setup widget
-	SetupPlayerWidget();
-	SetupPlayerAnimation();
+  // Cache anim instance
+  if (GetMesh() && GetMesh()->GetAnimInstance()) {
+    PlayerAnimInstance =
+        Cast<USlashCharacteAnimInstanceBase>(GetMesh()->GetAnimInstance());
+  }
 
-	// Cache anim instance
-	if (GetMesh() && GetMesh()->GetAnimInstance())
-	{
-		PlayerAnimInstance = Cast<USlashCharacteAnimInstanceBase>(GetMesh()->GetAnimInstance());
-		
-	}
-
-	// Initialize equippable items
+  // Initialize equippable items
 }
 
-void ASlashPlayerCharacter::Tick(float DeltaSeconds)
-{
-	Super::Tick(DeltaSeconds);
+void ASlashPlayerCharacter::Tick(float DeltaSeconds) {
+  Super::Tick(DeltaSeconds);
 
-	CheckIfCrawlMode();
-	if (bCanWalkOnBeam)
-	{
-		CheckForBeamBelow();
-	}
-	
-	
-	// if (GEngine)
-	// {
-	// 	GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Cyan, FString::Printf(TEXT("Stamina: %f"), StatComponent->CurrentStamina));
-	// }
-	if (IsPlayerMoving())
-	{
-		if (CurrentState != ECharacterState::Jumping)
-		{
-			SetCharacterState(ECharacterState::Moving);
-		}
-	}
-	else
-	{
-		if (CurrentState != ECharacterState::Jumping)
-		{
-			SetCharacterState(ECharacterState::Idle);
-			// When stopping movement, enable movement-based rotation and disable camera-facing rotation
-			GetCharacterMovement()->bOrientRotationToMovement = true;
-			GetCharacterMovement()->bUseControllerDesiredRotation = false;
-			GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
-		}
-	}
+  CheckIfCrawlMode();
+  if (bCanWalkOnBeam) {
+    CheckForBeamBelow();
+  }
 
-	if (!GetCharacterMovement()->IsFalling())
-	{
-		if (bCrawlMode)
-		{
-			GetCharacterMovement()->RotationRate = FRotator(0.0f, 85.0f, 0.0f);
-		}
-	}
-	
-	
-	if (bIsSprinting)
-	{
-		GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
-	}
-	else if (bIsCrouching)
-	{
-		GetCharacterMovement()->MaxWalkSpeedCrouched = CrouchSpeed;
-	}
-	else if (bIsJumping)
-	{
-		GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
-	}
-	else if (bCrawlMode)
-	{
-		GetCharacterMovement()->MaxWalkSpeedCrouched = CrawlSpeed;
-	}
-	else if (bIsWalkingOnBeam)
-	{
-		GetCharacterMovement()->MaxWalkSpeed = BeamWalkSpeed;
-	}
-	else
-	{
-		GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
-	}
+  // if (GEngine)
+  // {
+  // 	GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Cyan,
+  // FString::Printf(TEXT("Stamina: %f"), StatComponent->CurrentStamina));
+  // }
+  if (IsPlayerMoving()) {
+    if (CurrentState != ECharacterState::Jumping) {
+      SetCharacterState(ECharacterState::Moving);
+    }
+  } else {
+    if (CurrentState != ECharacterState::Jumping) {
+      SetCharacterState(ECharacterState::Idle);
+      // When stopping movement, enable movement-based rotation and disable
+      // camera-facing rotation
+      GetCharacterMovement()->bOrientRotationToMovement = true;
+      GetCharacterMovement()->bUseControllerDesiredRotation = false;
+      GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
+    }
+  }
 
+  if (!GetCharacterMovement()->IsFalling()) {
+    if (bCrawlMode) {
+      GetCharacterMovement()->RotationRate = FRotator(0.0f, 85.0f, 0.0f);
+    }
+  }
 
-	FindOutGroundDistance();
-	
+  if (bIsSprinting) {
+    GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+  } else if (bIsCrouching) {
+    GetCharacterMovement()->MaxWalkSpeedCrouched = CrouchSpeed;
+  } else if (bIsJumping) {
+    GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+  } else if (bCrawlMode) {
+    GetCharacterMovement()->MaxWalkSpeedCrouched = CrawlSpeed;
+  } else if (bIsWalkingOnBeam) {
+    GetCharacterMovement()->MaxWalkSpeed = BeamWalkSpeed;
+  } else {
+    GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+  }
+
+  FindOutGroundDistance();
 }
 
-void ASlashPlayerCharacter::Landed(const FHitResult& Hit)
-{
-	Super::Landed(Hit);
-	bCanWalkOnBeam = true;
+void ASlashPlayerCharacter::Landed(const FHitResult &Hit) {
+  Super::Landed(Hit);
+  bCanWalkOnBeam = true;
 }
 
-#pragma endregion 
+// ----------------------------------------------- Locomotion
+// ----------------------------------------------------------
 
-#pragma region Locomotion
+void ASlashPlayerCharacter::Move(const FInputActionValue &Value) {
+  FVector2D MovementVector = Value.Get<FVector2D>();
+  MoveActionValue = MovementVector;
 
-void ASlashPlayerCharacter::Move(const FInputActionValue& Value)
-{
-	FVector2D MovementVector = Value.Get<FVector2D>();
-	MoveActionValue = MovementVector;
+  if (Controller != nullptr && StateComponent->MovementInput) {
+    const FRotator Rotation = Controller->GetControlRotation();
+    const FRotator YawRotation(0, Rotation.Yaw, 0);
 
-	if (Controller != nullptr && StateComponent->MovementInput)
-	{
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
+    const FVector ForwardDirection =
+        FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+    const FVector RightDirection =
+        FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+    AddMovementInput(ForwardDirection, MovementVector.Y);
+    AddMovementInput(RightDirection, MovementVector.X);
 
-		AddMovementInput(ForwardDirection, MovementVector.Y);
-		AddMovementInput(RightDirection, MovementVector.X);
+    if (CurrentState == ECharacterState::Idle) {
+      SetCharacterState(ECharacterState::Moving);
 
-		if (CurrentState == ECharacterState::Idle)
-		{
-			SetCharacterState(ECharacterState::Moving);
+      // When starting to move, disable movement-based rotation and enable
+      // camera-facing rotation
+      GetCharacterMovement()->bOrientRotationToMovement = false;
+      GetCharacterMovement()->bUseControllerDesiredRotation = true;
+      GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
 
-			// When starting to move, disable movement-based rotation and enable camera-facing rotation
-			GetCharacterMovement()->bOrientRotationToMovement = false;
-			GetCharacterMovement()->bUseControllerDesiredRotation = true;
-			GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
-
-			//---> Edited
-			// GetCharacterMovement()->bOrientRotationToMovement = true;
-			// GetCharacterMovement()->bUseControllerDesiredRotation = false;
-			// GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
-
-		}
-	}
+      //---> Edited
+      // GetCharacterMovement()->bOrientRotationToMovement = true;
+      // GetCharacterMovement()->bUseControllerDesiredRotation = false;
+      // GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+    }
+  }
 }
 
-void ASlashPlayerCharacter::Look(const FInputActionValue& Value)
-{
-	FVector2D LookAxisVector = Value.Get<FVector2D>();
+void ASlashPlayerCharacter::Look(const FInputActionValue &Value) {
+  FVector2D LookAxisVector = Value.Get<FVector2D>();
 
-	if (Controller != nullptr)
-	{
-		AddControllerYawInput(LookAxisVector.X);
-		AddControllerPitchInput(-LookAxisVector.Y);
-	}
+  if (Controller != nullptr) {
+    AddControllerYawInput(LookAxisVector.X);
+    AddControllerPitchInput(-LookAxisVector.Y);
+  }
 }
 
-void ASlashPlayerCharacter::StartJump()
-{
-	SetCharacterState(ECharacterState::Jumping);
-	Jump();
-	bCanWalkOnBeam = false;
+void ASlashPlayerCharacter::StartJump() {
+  SetCharacterState(ECharacterState::Jumping);
+  Jump();
+  bCanWalkOnBeam = false;
 }
 
-void ASlashPlayerCharacter::StopJump()
-{
-	SetCharacterState(ECharacterState::Idle);
-	StopJumping();
+void ASlashPlayerCharacter::StopJump() {
+  SetCharacterState(ECharacterState::Idle);
+  StopJumping();
 }
 
-void ASlashPlayerCharacter::Sprint()
-{
-	if (MovePressedKey.GetFName() == FName("W"))
-	{
-		if (StatComponent)
-		{
-			if (StatComponent->CheckPlayerHasEnoughStamina(5.0f) && IsPlayerMoving())
-			{
-				//GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
-				StatComponent->DecreaseStamina(StatComponent->StaminaDegenRate);
-				bIsSprinting = true;
-			}
-			else
-			{
-				bIsSprinting = false;
-				//GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
-			}
-		}
-	}
-	
-	
+void ASlashPlayerCharacter::Sprint() {
+  if (MovePressedKey.GetFName() == FName("W")) {
+    if (StatComponent) {
+      if (StatComponent->CheckPlayerHasEnoughStamina(5.0f) &&
+          IsPlayerMoving()) {
+        // GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+        StatComponent->DecreaseStamina(StatComponent->StaminaDegenRate);
+        bIsSprinting = true;
+      } else {
+        bIsSprinting = false;
+        // GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+      }
+    }
+  }
 }
 
-void ASlashPlayerCharacter::SprintCompleted()
-{
-	GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
-	bIsSprinting = false;
-	// Start stamina regeneration after sprinting
-	if (StatComponent)
-		StatComponent->HandleStaminaRegeneration(true, 2.0f);
+void ASlashPlayerCharacter::SprintCompleted() {
+  GetCharacterMovement()->MaxWalkSpeed = NormalSpeed;
+  bIsSprinting = false;
+  // Start stamina regeneration after sprinting
+  if (StatComponent)
+    StatComponent->HandleStaminaRegeneration(true, 2.0f);
 }
 
-void ASlashPlayerCharacter::PlayerCrouch()
-{
-	if (bCrawlMode) return;
+void ASlashPlayerCharacter::PlayerCrouch() {
+  if (bCrawlMode)
+    return;
 
-	if (!GetCharacterMovement()->IsFalling())
-	{
-		if (bIsCrouching)
-		{
-			UnCrouch();
-			bIsCrouching = false;
-		}
-		else
-		{
-			GetCharacterMovement()->SetCrouchedHalfHeight(60.0f);
-			Crouch();
-			bIsCrouching = true;
-		}
-	}
-	
+  if (!GetCharacterMovement()->IsFalling()) {
+    if (bIsCrouching) {
+      UnCrouch();
+      bIsCrouching = false;
+    } else {
+      GetCharacterMovement()->SetCrouchedHalfHeight(60.0f);
+      Crouch();
+      bIsCrouching = true;
+    }
+  }
 }
 
-#pragma endregion
+// --------------------------------------------------- Roll
+// ------------------------------------------------------------
 
+void ASlashPlayerCharacter::PerformRoll() {
+  // Disable collision with enemies during roll
+  GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 
-#pragma region Roll
+  FString KeyName = MovePressedKey.GetDisplayName().ToString();
+  bIsRolling = true;
+  if (KeyName == "W") {
+    if (PlayerAnimInstance && RollForwardAnimMontage) {
+      PlayerAnimInstance->Montage_Play(RollForwardAnimMontage, 1.0f);
+    }
 
-void ASlashPlayerCharacter::PerformRoll()
-{
-	// Disable collision with enemies during roll
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-	
-	FString KeyName = MovePressedKey.GetDisplayName().ToString();
-	bIsRolling = true;
-	if (KeyName == "W")
-	{
-		if (PlayerAnimInstance && RollForwardAnimMontage)
-		{
-			PlayerAnimInstance->Montage_Play(RollForwardAnimMontage, 1.0f);
-		}
-		
-		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
-		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollForwardAnimMontage);
-		
-	}
-	else if (KeyName == "S")
-	{
-		if (PlayerAnimInstance && RollBackwardAnimMontage)
-		{
-			PlayerAnimInstance->Montage_Play(RollBackwardAnimMontage, 1.0f);
-		}
-		
-		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
-		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollBackwardAnimMontage);
-		
-	}
-	else if (KeyName == "A")
-	{
-		if (PlayerAnimInstance && RollLeftAnimMontage)
-		{
-			PlayerAnimInstance->Montage_Play(RollLeftAnimMontage, 1.0f);
-		}
-	
-		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
-		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollLeftAnimMontage);
-	}
-	else if (KeyName == "D")
-	{
-		if (PlayerAnimInstance && RollRightAnimMontage)
-		{
-			PlayerAnimInstance->Montage_Play(RollRightAnimMontage, 1.0f);
-		}
+    FOnMontageEnded MontageEndedDelegate;
+    MontageEndedDelegate.BindUObject(
+        this, &ASlashPlayerCharacter::OnRollMontageCompleted);
+    PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                               RollForwardAnimMontage);
 
-		FOnMontageEnded MontageEndedDelegate;
-		MontageEndedDelegate.BindUObject(this, &ASlashPlayerCharacter::OnRollMontageCompleted);
-		PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, RollRightAnimMontage);
-		
-	}
-	
+  } else if (KeyName == "S") {
+    if (PlayerAnimInstance && RollBackwardAnimMontage) {
+      PlayerAnimInstance->Montage_Play(RollBackwardAnimMontage, 1.0f);
+    }
+
+    FOnMontageEnded MontageEndedDelegate;
+    MontageEndedDelegate.BindUObject(
+        this, &ASlashPlayerCharacter::OnRollMontageCompleted);
+    PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                               RollBackwardAnimMontage);
+
+  } else if (KeyName == "A") {
+    if (PlayerAnimInstance && RollLeftAnimMontage) {
+      PlayerAnimInstance->Montage_Play(RollLeftAnimMontage, 1.0f);
+    }
+
+    FOnMontageEnded MontageEndedDelegate;
+    MontageEndedDelegate.BindUObject(
+        this, &ASlashPlayerCharacter::OnRollMontageCompleted);
+    PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                               RollLeftAnimMontage);
+  } else if (KeyName == "D") {
+    if (PlayerAnimInstance && RollRightAnimMontage) {
+      PlayerAnimInstance->Montage_Play(RollRightAnimMontage, 1.0f);
+    }
+
+    FOnMontageEnded MontageEndedDelegate;
+    MontageEndedDelegate.BindUObject(
+        this, &ASlashPlayerCharacter::OnRollMontageCompleted);
+    PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                               RollRightAnimMontage);
+  }
 }
 
-void ASlashPlayerCharacter::EndRoll()
-{
-	// Re-enable collision
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-	
+void ASlashPlayerCharacter::EndRoll() {
+  // Re-enable collision
+  GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 }
 
-void ASlashPlayerCharacter::OnRollMontageCompleted(UAnimMontage* Montage, bool bInterrupted)
-{
-	if (bInterrupted)
-	{
-		// The montage was interrupted by another montage
-		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Interrupted!"));
-		if (Montage && PlayerAnimInstance->Montage_IsPlaying(Montage))
-		{
-			PlayerAnimInstance->Montage_Stop(0.1f, Montage);
-		}
-	}
-	else
-	{
-		// The montage completed successfully
-		//UKismetSystemLibrary::PrintString(this, TEXT("Montage Completed."));
-		bIsRolling = false;
-		// FRotator ActorRotation = GetActorRotation();
-		// FRotator BaseAimRotation = GetBaseAimRotation();
-		//
-		// FRotator NewRotation( BaseAimRotation.Pitch, BaseAimRotation.Yaw, ActorRotation.Roll );
-		//
-		// SetActorRotation(NewRotation);
+void ASlashPlayerCharacter::OnRollMontageCompleted(UAnimMontage *Montage,
+                                                   bool bInterrupted) {
+  if (bInterrupted) {
+    // The montage was interrupted by another montage
+    // UKismetSystemLibrary::PrintString(this, TEXT("Montage Interrupted!"));
+    if (Montage && PlayerAnimInstance->Montage_IsPlaying(Montage)) {
+      PlayerAnimInstance->Montage_Stop(0.1f, Montage);
+    }
+  } else {
+    // The montage completed successfully
+    // UKismetSystemLibrary::PrintString(this, TEXT("Montage Completed."));
+    bIsRolling = false;
+    // FRotator ActorRotation = GetActorRotation();
+    // FRotator BaseAimRotation = GetBaseAimRotation();
+    //
+    // FRotator NewRotation( BaseAimRotation.Pitch, BaseAimRotation.Yaw,
+    // ActorRotation.Roll );
+    //
+    // SetActorRotation(NewRotation);
 
-		//SetCharacterState(ECharacterState::Idle);
-	}
+    // SetCharacterState(ECharacterState::Idle);
+  }
 
-	EndRoll();
-	
+  EndRoll();
 }
 
-#pragma endregion
+// -------------------------------------------------- Crawl
+// ------------------------------------------------------------
 
-#pragma region Crawl
+void ASlashPlayerCharacter::ToggleCrawlMode() {
+  if (!GetCharacterMovement()->IsFalling()) {
+    if (bIsCrouching) // true
+    {
+      bCrawlMode = false;
+    } else // false
+    {
+      if (bCrawlMode) {
+        bCrawlMode = false;
+        const float DelayDuration = 0.35f;
+        if (GWorld) {
+          FTimerHandle CrawlDelayTimerHandle;
+          GetWorld()->GetTimerManager().SetTimer(
+              CrawlDelayTimerHandle, this,
+              &ASlashPlayerCharacter::OnCrawlDelayCompleted, DelayDuration,
+              false);
+        }
 
-void ASlashPlayerCharacter::ToggleCrawlMode()
-{
-	if (!GetCharacterMovement()->IsFalling())
-	{
-		if (bIsCrouching) // true
-		{
-			bCrawlMode = false;
-		}
-		else // false
-		{
-			if (bCrawlMode)
-			{
-				bCrawlMode = false;
-				const float DelayDuration = 0.35f;
-				if (GWorld)
-				{
-					FTimerHandle CrawlDelayTimerHandle;
-					GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle, this, &ASlashPlayerCharacter::OnCrawlDelayCompleted, DelayDuration, false);
-				}
+        if (CrawlToStandtAnimMontage && PlayerAnimInstance) {
+          StateComponent->MovementInput = false;
+          PlayerAnimInstance->Montage_Play(CrawlToStandtAnimMontage, 1.0f);
+          FOnMontageEnded MontageEndedDelegate;
+          MontageEndedDelegate.BindLambda(
+              [this](UAnimMontage *Montage, bool bInterrupted) {
+                if (!bInterrupted) {
+                  // Montage completed successfully
+                  // Your completion logic here
+                  StateComponent->MovementInput = true;
+                }
+              });
+          PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                                     CrawlToStandtAnimMontage);
+        }
+      } else {
+        GetCharacterMovement()->SetCrouchedHalfHeight(CrawlCapsuleHalfHeight);
+        Crouch();
+        const float DelayDuration = 0.24f;
+        if (GWorld) {
+          FTimerHandle CrawlDelayTimerHandle;
+          GetWorld()->GetTimerManager().SetTimer(
+              CrawlDelayTimerHandle,
+              [this]() {
+                bCrawlMode = true;
 
-				if (CrawlToStandtAnimMontage && PlayerAnimInstance)
-				{
-					StateComponent->MovementInput = false;
-					PlayerAnimInstance->Montage_Play(CrawlToStandtAnimMontage, 1.0f);
-					FOnMontageEnded MontageEndedDelegate;
-					MontageEndedDelegate.BindLambda([this](UAnimMontage* Montage, bool bInterrupted)
-					{
-						if (!bInterrupted)
-						{
-							// Montage completed successfully
-							// Your completion logic here
-							StateComponent->MovementInput = true;
-						}
-					});
-					PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, CrawlToStandtAnimMontage);
-
-				}
-			}
-			else
-			{
-				GetCharacterMovement()->SetCrouchedHalfHeight(CrawlCapsuleHalfHeight);
-				Crouch();
-				const float DelayDuration = 0.24f;
-				if (GWorld)
-				{
-					FTimerHandle CrawlDelayTimerHandle;
-					GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle,
-						[this]()
-					{
-							bCrawlMode = true;
-
-							//--> Disable strafe and aiming
-					},
-					DelayDuration,
-					false);
-				}
-			}
-		}
-	}
-	
+                //--> Disable strafe and aiming
+              },
+              DelayDuration, false);
+        }
+      }
+    }
+  }
 }
 
-void ASlashPlayerCharacter::CheckIfCrawlMode()
-{
-	if (bCrawlMode)
-	{
-		//Calculate Direction
-		const FVector Velocity = GetVelocity();
-		const FRotator BaseRotation = GetActorRotation();
-		DirectionCALC = UKismetAnimationLibrary::CalculateDirection(Velocity, BaseRotation);
+void ASlashPlayerCharacter::CheckIfCrawlMode() {
+  if (bCrawlMode) {
+    // Calculate Direction
+    const FVector Velocity = GetVelocity();
+    const FRotator BaseRotation = GetActorRotation();
+    DirectionCALC =
+        UKismetAnimationLibrary::CalculateDirection(Velocity, BaseRotation);
 
-		if (MoveActionValue.Size() == 0.0f)
-		{
-			
-		}
-		else
-		{
-			bool bDirectCalc1 = USlashMacrosLibrary::IsFloatInRange(DirectionCALC, 75.0f, 180.0f, true, true);
-			bool bDirectCalc2 = USlashMacrosLibrary::IsFloatInRange(DirectionCALC, -180.0f, -75.0f, true, true);
+    if (MoveActionValue.Size() == 0.0f) {
 
-			if (bDirectCalc1 || bDirectCalc2)
-			{
-				CrawlRotateRight = USlashMacrosLibrary::IsFloatInRange(DirectionCALC, 0.0f, 180.0f, true, true);
-			}
-		}
-		
-	}
+    } else {
+      bool bDirectCalc1 = USlashMacrosLibrary::IsFloatInRange(
+          DirectionCALC, 75.0f, 180.0f, true, true);
+      bool bDirectCalc2 = USlashMacrosLibrary::IsFloatInRange(
+          DirectionCALC, -180.0f, -75.0f, true, true);
+
+      if (bDirectCalc1 || bDirectCalc2) {
+        CrawlRotateRight = USlashMacrosLibrary::IsFloatInRange(
+            DirectionCALC, 0.0f, 180.0f, true, true);
+      }
+    }
+  }
 }
 
-void ASlashPlayerCharacter::ResetDoOnce()
-{
-	GetCharacterMovement()->bAllowPhysicsRotationDuringAnimRootMotion = false;
+void ASlashPlayerCharacter::ResetDoOnce() {
+  GetCharacterMovement()->bAllowPhysicsRotationDuringAnimRootMotion = false;
 
-	if (bHasExecutedOnce)
-	{
-		// Add your specific logic here
-		GetCharacterMovement()->bAllowPhysicsRotationDuringAnimRootMotion = true;
-		PlayCrawlMontage();
-		// Set the boolean to false to prevent further execution
-		bHasExecutedOnce = false; 
-	}
+  if (bHasExecutedOnce) {
+    // Add your specific logic here
+    GetCharacterMovement()->bAllowPhysicsRotationDuringAnimRootMotion = true;
+    PlayCrawlMontage();
+    // Set the boolean to false to prevent further execution
+    bHasExecutedOnce = false;
+  }
 }
 
-void ASlashPlayerCharacter::PlayCrawlMontage()
-{
-	UAnimMontage* CrawlRotateMontage = CrawlRotateRight? CrawlRotateRightAnimMontage : CrawlRotateLeftAnimMontage;
+void ASlashPlayerCharacter::PlayCrawlMontage() {
+  UAnimMontage *CrawlRotateMontage = CrawlRotateRight
+                                         ? CrawlRotateRightAnimMontage
+                                         : CrawlRotateLeftAnimMontage;
 
-	if (CrawlRotateMontage && PlayerAnimInstance)
-	{
-		PlayerAnimInstance->Montage_Play(CrawlRotateMontage, 1.0f);
+  if (CrawlRotateMontage && PlayerAnimInstance) {
+    PlayerAnimInstance->Montage_Play(CrawlRotateMontage, 1.0f);
 
-		// Bind delegates before playing the montage
-		FOnMontageBlendingOutStarted BlendingOutDelegate;
-		BlendingOutDelegate.BindLambda([this](UAnimMontage* Montage, bool bInterrupted)
-		{
-			if (!bInterrupted)
-			{
-				// Montage completed successfully
-				// Your completion logic here
-				const float DelayDuration = 0.4f;
-				if (GWorld)
-				{
-					FTimerHandle CrawlDelayTimerHandle;
-					GetWorld()->GetTimerManager().SetTimer(CrawlDelayTimerHandle,
-						[this]()
-					{
-							ResetDoOnce();
-					},
-					DelayDuration,
-					false);
-				}
-				
-			}
-			else
-			{
-				
-			}
-		});
-		PlayerAnimInstance->Montage_SetBlendingOutDelegate(BlendingOutDelegate, CrawlRotateMontage);
-	}
+    // Bind delegates before playing the montage
+    FOnMontageBlendingOutStarted BlendingOutDelegate;
+    BlendingOutDelegate.BindLambda(
+        [this](UAnimMontage *Montage, bool bInterrupted) {
+          if (!bInterrupted) {
+            // Montage completed successfully
+            // Your completion logic here
+            const float DelayDuration = 0.4f;
+            if (GWorld) {
+              FTimerHandle CrawlDelayTimerHandle;
+              GetWorld()->GetTimerManager().SetTimer(
+                  CrawlDelayTimerHandle, [this]() { ResetDoOnce(); },
+                  DelayDuration, false);
+            }
+
+          } else {
+          }
+        });
+    PlayerAnimInstance->Montage_SetBlendingOutDelegate(BlendingOutDelegate,
+                                                       CrawlRotateMontage);
+  }
 }
 
-void ASlashPlayerCharacter::OnCrawlDelayCompleted()
-{
-	UnCrouch();
+void ASlashPlayerCharacter::OnCrawlDelayCompleted() { UnCrouch(); }
+
+// ------------------------------------------------ Beam Walk
+// ----------------------------------------------------------
+
+void ASlashPlayerCharacter::CheckForBeamBelow() {
+  if (IsValid(GetMesh())) {
+    FVector TraceStart = GetMesh()->GetComponentLocation();
+    FVector TraceEnd = TraceStart;
+
+    FHitResult OutHit;
+    const TArray<AActor *> ActorsToIgnore = {this};
+
+    bool bHitDetected = UKismetSystemLibrary::CapsuleTraceSingleForObjects(
+        GetWorld(), TraceStart, TraceEnd,
+        15.0f, // Radius
+        33.0f, // Half Height
+        ObjectTypes,
+        false, // bTraceComplex
+        ActorsToIgnore, EDrawDebugTrace::None, OutHit,
+        true // bIgnoreSelf
+
+    );
+    // FLinearColor::White,
+    // 		FLinearColor::Green,
+    // 		5.0f // Draw Time
+
+    if (bHitDetected && OutHit.GetActor()) {
+      // Check if the hit actor has the "Beam" tag
+      if (OutHit.GetActor()->ActorHasTag(FName("Beam"))) {
+        bIsWalkingOnBeam = true;
+      } else {
+        bIsWalkingOnBeam = false;
+      }
+    }
+  }
 }
 
-#pragma endregion
+// ---------------------------------------------- Equip/Unequip
+// --------------------------------------------------------
 
-#pragma region Beam Walk
+UAnimMontage *
+ASlashPlayerCharacter::GetEquipMontage(FEquippableStruct EquippableStruct) {
 
-void ASlashPlayerCharacter::CheckForBeamBelow()
-{
-	if (IsValid(GetMesh()))
-	{
-		FVector TraceStart = GetMesh()->GetComponentLocation();
-		FVector TraceEnd = TraceStart;
-
-		FHitResult OutHit;
-		const TArray<AActor*> ActorsToIgnore = { this };
-		
-		bool bHitDetected = UKismetSystemLibrary::CapsuleTraceSingleForObjects(
-				GetWorld(),
-				TraceStart,
-				TraceEnd,
-				15.0f, // Radius
-				33.0f, // Half Height
-				ObjectTypes,
-				false, // bTraceComplex
-				ActorsToIgnore,
-				EDrawDebugTrace::None,
-				OutHit,
-				true // bIgnoreSelf
-				
-			);
-		// FLinearColor::White,
-		// 		FLinearColor::Green,
-		// 		5.0f // Draw Time
-		
-
-		if (bHitDetected && OutHit.GetActor())
-		{
-			// Check if the hit actor has the "Beam" tag
-			if (OutHit.GetActor()->ActorHasTag(FName("Beam")))
-			{
-				bIsWalkingOnBeam = true;
-			}
-			else
-			{
-				bIsWalkingOnBeam = false;
-			}
-		}
-	}
-	
+  switch (EquippableStruct.AttachSocket) {
+  case ESocketEnum::WeaponBowBack_Socket:
+    return EquipBowAnimMontage;
+  case ESocketEnum::WeaponCrossbowBack_Socket:
+    return nullptr;
+  case ESocketEnum::WeaponSword_Socket:
+    return EquipSwordAnimMontage;
+  case ESocketEnum::WeaponKnife_Socket:
+    return EquipKnifeAnimMontage;
+  default:
+    return nullptr;
+  }
 }
 
+UAnimMontage *
+ASlashPlayerCharacter::GetUnequipMontage(FEquippableStruct EquippableStruct) {
 
-#pragma endregion 
-
-#pragma region Equip/Unequip
-
-UAnimMontage* ASlashPlayerCharacter::GetEquipMontage(FEquippableStruct EquippableStruct)
-{
-
-	switch (EquippableStruct.AttachSocket)
-	{
-	case ESocketEnum::WeaponBowBack_Socket:
-		return EquipBowAnimMontage;
-	case ESocketEnum::WeaponCrossbowBack_Socket:
-		return nullptr;
-	case ESocketEnum::WeaponSword_Socket:
-		return EquipSwordAnimMontage;
-	case ESocketEnum::WeaponKnife_Socket:
-		return EquipKnifeAnimMontage;
-	default:
-		return nullptr;
-	}
+  switch (EquippableStruct.AttachSocket) {
+  case ESocketEnum::WeaponBowBack_Socket:
+    return UnequipBowAnimMontage;
+  case ESocketEnum::WeaponCrossbowBack_Socket:
+    return nullptr;
+  case ESocketEnum::WeaponSword_Socket:
+    return UnequipSwordAnimMontage;
+  case ESocketEnum::WeaponKnife_Socket:
+    return UnequipKnifeAnimMontage;
+  default:
+    return nullptr;
+  }
 }
 
-UAnimMontage* ASlashPlayerCharacter::GetUnequipMontage(FEquippableStruct EquippableStruct)
-{
+void ASlashPlayerCharacter::EquipItem(EWeaponStateTypeEnum ItemType) {
+  FEquippableStruct *FoundItem = EquippableSetup.Find(ItemType);
 
-	switch (EquippableStruct.AttachSocket)
-	{
-	case ESocketEnum::WeaponBowBack_Socket:
-		return UnequipBowAnimMontage;
-	case ESocketEnum::WeaponCrossbowBack_Socket:
-		return nullptr;
-	case ESocketEnum::WeaponSword_Socket:
-		return UnequipSwordAnimMontage;
-	case ESocketEnum::WeaponKnife_Socket:
-		return UnequipKnifeAnimMontage;
-	default:
-		return nullptr;
-	}
+  // This switch block is the C++ equivalent of the "Switch on Socket_Enum" node
+  FName HandToAttachTo;
+
+  // Set up the attachment rules, matching the pins on the Blueprint node
+  const FAttachmentTransformRules AttachmentRules(
+      EAttachmentRule::SnapToTarget, // Location Rule
+      EAttachmentRule::SnapToTarget, // Rotation Rule
+      EAttachmentRule::KeepRelative, // Scale Rule
+      true                           // bWeldSimulatedBodies
+  );
+
+  if (FoundItem) {
+    switch (FoundItem->AttachSocket) {
+    case ESocketEnum::WeaponBowBack_Socket:
+      HandToAttachTo = FName("HoldItem_Bow_l");
+      break;
+    case ESocketEnum::WeaponCrossbowBack_Socket:
+      break;
+    case ESocketEnum::WeaponSword_Socket:
+      HandToAttachTo = FName("HoldItem_Sword_r");
+      break;
+    case ESocketEnum::WeaponKnife_Socket:
+      HandToAttachTo = FName("HoldItem_Sword_r");
+      break;
+    }
+
+    FoundItem->ActorRef->AttachToComponent(GetMesh(), AttachmentRules,
+                                           HandToAttachTo);
+
+    SetEquipStatus(ItemType, true);
+  }
 }
 
-
-
-
-
-void ASlashPlayerCharacter::EquipItem(EWeaponStateTypeEnum ItemType)
-{
-	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
-
-	// This switch block is the C++ equivalent of the "Switch on Socket_Enum" node
-	FName HandToAttachTo;
-
-	// Set up the attachment rules, matching the pins on the Blueprint node
-	const FAttachmentTransformRules AttachmentRules
-	(
-		EAttachmentRule::SnapToTarget, // Location Rule
-		EAttachmentRule::SnapToTarget, // Rotation Rule
-		EAttachmentRule::KeepRelative, // Scale Rule
-		true                           // bWeldSimulatedBodies
-	);
-	
-	if (FoundItem)
-	{
-		switch (FoundItem->AttachSocket)
-		{
-		case ESocketEnum::WeaponBowBack_Socket:
-			HandToAttachTo = FName("HoldItem_Bow_l");
-			break;
-		case ESocketEnum::WeaponCrossbowBack_Socket:
-			break;
-		case ESocketEnum::WeaponSword_Socket:
-			HandToAttachTo = FName("HoldItem_Sword_r");
-			break;
-		case ESocketEnum::WeaponKnife_Socket:
-			HandToAttachTo = FName("HoldItem_Sword_r");
-			break;
-		}
-
-		FoundItem->ActorRef->AttachToComponent(GetMesh(), AttachmentRules, HandToAttachTo);
-
-		SetEquipStatus(ItemType, true);
-	}
+void ASlashPlayerCharacter::UnequipItem(EWeaponStateTypeEnum ItemType) {
+  FEquippableStruct *FoundItem = EquippableSetup.Find(ItemType);
+  if (FoundItem) {
+    // AttachItemSocket(*FoundItem, FoundItem->ActorRef);
+    SetEquipStatus(ItemType, false);
+  }
 }
 
-void ASlashPlayerCharacter::UnequipItem(EWeaponStateTypeEnum ItemType)
-{
-	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
-	if (FoundItem)
-	{
-		//AttachItemSocket(*FoundItem, FoundItem->ActorRef);
-		SetEquipStatus(ItemType, false);
-	}
+void ASlashPlayerCharacter::EquipUnequipItem(EWeaponStateTypeEnum ItemType) {
+  // Set the current equipping item type
+  CurrentEquippingItemType = ItemType;
+
+  FEquippableStruct *PrimaryItem =
+      EquippableSetup.Find(EWeaponStateTypeEnum::Primary);
+  FEquippableStruct *SecondaryItem =
+      EquippableSetup.Find(EWeaponStateTypeEnum::Secondary);
+  FEquippableStruct *Placeholder1Item =
+      EquippableSetup.Find(EWeaponStateTypeEnum::Placeholder1);
+  bIsPrimaryItemEquipped =
+      (PrimaryItem->EquipHand == SecondaryItem->EquipHand &&
+       PrimaryItem->EquipHand == Placeholder1Item->EquipHand) &&
+      PrimaryItem->Equipped;
+  bIsSecondaryItemEquipped =
+      (SecondaryItem->EquipHand == PrimaryItem->EquipHand &&
+       SecondaryItem->EquipHand == Placeholder1Item->EquipHand) &&
+      SecondaryItem->Equipped;
+  bIsPlaceholder1ItemEquipped =
+      (Placeholder1Item->EquipHand == PrimaryItem->EquipHand &&
+       Placeholder1Item->EquipHand == SecondaryItem->EquipHand) &&
+      Placeholder1Item->Equipped;
+
+  // Prevent equipping/unequipping if an animation montage is currently playing
+  if (!PlayerAnimInstance->Montage_IsPlaying(
+          PlayerAnimInstance->GetCurrentActiveMontage())) {
+    FEquippableStruct *FoundItem = EquippableSetup.Find(ItemType);
+    if (FoundItem->ActorRef) {
+      switch (ItemType) {
+      case EWeaponStateTypeEnum::Primary:
+        if (bIsPrimaryItemEquipped) {
+          UAnimMontage *UnequipSecondaryMontage =
+              GetUnequipMontage(*SecondaryItem);
+          if (UnequipSecondaryMontage && PlayerAnimInstance) {
+            PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage, 1.75f);
+            CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
+            // Bind a delegate to the montage end event if needed
+            PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+
+            FOnMontageEnded MontageEndedDelegate;
+            MontageEndedDelegate.BindLambda([this, Placeholder1Item,
+                                             PrimaryItem](UAnimMontage *Montage,
+                                                          bool bInterrupted) {
+              if (!bInterrupted) {
+                // Montage completed successfully
+                // Your completion logic here
+
+                UAnimMontage *UnequipPalceholder1Montage =
+                    GetUnequipMontage(*Placeholder1Item);
+                if (UnequipPalceholder1Montage && PlayerAnimInstance) {
+                  PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage,
+                                                   1.75f);
+                  CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
+                  // Bind a delegate to the montage end event if needed
+                  PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                      this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+                  FOnMontageEnded MontageEndedDelegate;
+                  MontageEndedDelegate.BindLambda([this, PrimaryItem](
+                                                      UAnimMontage *Montage,
+                                                      bool bInterrupted) {
+                    if (!bInterrupted) {
+                      // Montage completed successfully
+                      // Your completion logic here
+                      UAnimMontage *EquipPrimaryMontage =
+                          GetEquipMontage(*PrimaryItem);
+                      if (EquipPrimaryMontage && PlayerAnimInstance) {
+                        PlayerAnimInstance->Montage_Play(EquipPrimaryMontage,
+                                                         1.75f);
+                        CurrentEquippingItemType =
+                            EWeaponStateTypeEnum::Primary;
+                        // Bind a delegate to the montage end event if needed
+                        PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                            this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+                      }
+                    }
+                  });
+                  PlayerAnimInstance->Montage_SetEndDelegate(
+                      MontageEndedDelegate, UnequipPalceholder1Montage);
+                }
+              }
+            });
+            PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                                       UnequipSecondaryMontage);
+          }
+        } else {
+          if (FoundItem->Equipped) {
+            UAnimMontage *UnequipMontage = GetUnequipMontage(*FoundItem);
+            if (UnequipMontage && PlayerAnimInstance) {
+              PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
+              // Bind a delegate to the montage end event if needed
+              PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                  this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+            }
+
+          } else {
+            UAnimMontage *EquipMontage = GetEquipMontage(*FoundItem);
+            if (EquipMontage && PlayerAnimInstance) {
+              PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
+              // Bind a delegate to the montage end event if needed
+              PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                  this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+            }
+          }
+        }
+        break;
+      case EWeaponStateTypeEnum::Secondary:
+        if (bIsSecondaryItemEquipped) {
+          UAnimMontage *UnequipPrimaryMontage = GetUnequipMontage(*PrimaryItem);
+          if (UnequipPrimaryMontage && PlayerAnimInstance) {
+            PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
+            CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
+            // Bind a delegate to the montage end event if needed
+            PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+            FOnMontageEnded MontageEndedDelegate;
+            MontageEndedDelegate.BindLambda([this, Placeholder1Item,
+                                             SecondaryItem](
+                                                UAnimMontage *Montage,
+                                                bool bInterrupted) {
+              if (!bInterrupted) {
+                // Montage completed successfully
+                // Your completion logic here
+                UAnimMontage *UnequipPalceholder1Montage =
+                    GetUnequipMontage(*Placeholder1Item);
+                if (UnequipPalceholder1Montage && PlayerAnimInstance) {
+                  PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage,
+                                                   1.75f);
+                  CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
+                  // Bind a delegate to the montage end event if needed
+                  FOnMontageEnded MontageEndedDelegate;
+                  MontageEndedDelegate.BindLambda([this, SecondaryItem](
+                                                      UAnimMontage *Montage,
+                                                      bool bInterrupted) {
+                    if (!bInterrupted) {
+                      // Montage completed successfully
+                      // Your completion logic here
+                      UAnimMontage *EquipSecondaryMontage =
+                          GetEquipMontage(*SecondaryItem);
+                      if (EquipSecondaryMontage && PlayerAnimInstance) {
+                        PlayerAnimInstance->Montage_Play(EquipSecondaryMontage,
+                                                         1.75f);
+                        CurrentEquippingItemType =
+                            EWeaponStateTypeEnum::Secondary;
+                        // Bind a delegate to the montage end event if needed
+                        PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                            this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+                      }
+                    }
+                  });
+                  PlayerAnimInstance->Montage_SetEndDelegate(
+                      MontageEndedDelegate, UnequipPalceholder1Montage);
+
+                  PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                      this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+                }
+              }
+            });
+            PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                                       UnequipPrimaryMontage);
+          }
+
+        } else {
+          if (FoundItem->Equipped) {
+            UAnimMontage *UnequipMontage = GetUnequipMontage(*FoundItem);
+            if (UnequipMontage && PlayerAnimInstance) {
+              PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
+              // Bind a delegate to the montage end event if needed
+              PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                  this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+            }
+          } else {
+            UAnimMontage *EquipMontage = GetEquipMontage(*FoundItem);
+            if (EquipMontage && PlayerAnimInstance) {
+              PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
+              // Bind a delegate to the montage end event if needed
+              PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                  this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+            }
+          }
+        }
+        break;
+      case EWeaponStateTypeEnum::Placeholder1:
+        if (bIsPlaceholder1ItemEquipped) {
+          UAnimMontage *UnequipPrimaryMontage = GetUnequipMontage(*PrimaryItem);
+          if (UnequipPrimaryMontage && PlayerAnimInstance) {
+            PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
+            CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
+            // Bind a delegate to the montage end event if needed
+            PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+            FOnMontageEnded MontageEndedDelegate;
+            MontageEndedDelegate.BindLambda([this, SecondaryItem,
+                                             Placeholder1Item](
+                                                UAnimMontage *Montage,
+                                                bool bInterrupted) {
+              if (!bInterrupted) {
+                // Montage completed successfully
+                // Your completion logic here
+                UAnimMontage *UnequipSecondaryMontage =
+                    GetUnequipMontage(*SecondaryItem);
+                if (UnequipSecondaryMontage && PlayerAnimInstance) {
+                  PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage,
+                                                   1.75f);
+                  CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
+                  // Bind a delegate to the montage end event if needed
+                  PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                      this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+                  FOnMontageEnded MontageEndedDelegate;
+                  MontageEndedDelegate.BindLambda([this, Placeholder1Item](
+                                                      UAnimMontage *Montage,
+                                                      bool bInterrupted) {
+                    if (!bInterrupted) {
+                      // Montage completed successfully
+                      // Your completion logic here
+                      UAnimMontage *EquipPalceholder1Montage =
+                          GetEquipMontage(*Placeholder1Item);
+                      if (EquipPalceholder1Montage && PlayerAnimInstance) {
+                        PlayerAnimInstance->Montage_Play(
+                            EquipPalceholder1Montage, 1.75f);
+                        CurrentEquippingItemType =
+                            EWeaponStateTypeEnum::Placeholder1;
+                        // Bind a delegate to the montage end event if needed
+                        PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                            this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+                      }
+                    }
+                  });
+                  PlayerAnimInstance->Montage_SetEndDelegate(
+                      MontageEndedDelegate, UnequipSecondaryMontage);
+                }
+              }
+            });
+            PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+                                                       UnequipPrimaryMontage);
+          }
+
+        } else {
+          if (FoundItem->Equipped) {
+            UAnimMontage *UnequipMontage = GetUnequipMontage(*FoundItem);
+            if (UnequipMontage && PlayerAnimInstance) {
+              PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
+              // Bind a delegate to the montage end event if needed
+              PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                  this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
+            }
+          } else {
+            UAnimMontage *EquipMontage = GetEquipMontage(*FoundItem);
+            if (EquipMontage && PlayerAnimInstance) {
+              PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
+              // Bind a delegate to the montage end event if needed
+              PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(
+                  this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
 }
 
-void ASlashPlayerCharacter::EquipUnequipItem(EWeaponStateTypeEnum ItemType)
-{
-	// Set the current equipping item type
-	CurrentEquippingItemType = ItemType;
-
-	
-	
-	FEquippableStruct* PrimaryItem = EquippableSetup.Find(EWeaponStateTypeEnum::Primary);
-	FEquippableStruct* SecondaryItem = EquippableSetup.Find(EWeaponStateTypeEnum::Secondary);
-	FEquippableStruct* Placeholder1Item = EquippableSetup.Find(EWeaponStateTypeEnum::Placeholder1);
-	bIsPrimaryItemEquipped = (PrimaryItem->EquipHand == SecondaryItem->EquipHand && PrimaryItem->EquipHand == Placeholder1Item->EquipHand) && PrimaryItem->Equipped ;
-	bIsSecondaryItemEquipped = (SecondaryItem->EquipHand == PrimaryItem->EquipHand && SecondaryItem->EquipHand == Placeholder1Item->EquipHand) && SecondaryItem->Equipped ;
-	bIsPlaceholder1ItemEquipped = (Placeholder1Item->EquipHand == PrimaryItem->EquipHand && Placeholder1Item->EquipHand == SecondaryItem->EquipHand) && Placeholder1Item->Equipped ;
-
-	
-	// Prevent equipping/unequipping if an animation montage is currently playing
-	if (!PlayerAnimInstance->Montage_IsPlaying(PlayerAnimInstance->GetCurrentActiveMontage()))
-	{
-		FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
-		if (FoundItem->ActorRef)
-		{
-			switch (ItemType)
-			{
-			case EWeaponStateTypeEnum::Primary:
-				if (bIsPrimaryItemEquipped)
-				{
-					UAnimMontage* UnequipSecondaryMontage			= GetUnequipMontage(*SecondaryItem);
-					if (UnequipSecondaryMontage && PlayerAnimInstance)
-					{
-						PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage, 1.75f);
-						CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
-						// Bind a delegate to the montage end event if needed
-						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-						
-						FOnMontageEnded MontageEndedDelegate;
-						MontageEndedDelegate.BindLambda([this, Placeholder1Item, PrimaryItem](UAnimMontage* Montage, bool bInterrupted)
-						{
-							if (!bInterrupted)
-							{
-								// Montage completed successfully
-								// Your completion logic here
-
-								UAnimMontage* UnequipPalceholder1Montage		= GetUnequipMontage(*Placeholder1Item);
-								if (UnequipPalceholder1Montage && PlayerAnimInstance)
-								{
-									PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage, 1.75f);
-									CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
-									// Bind a delegate to the montage end event if needed
-									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-									FOnMontageEnded MontageEndedDelegate;
-									MontageEndedDelegate.BindLambda([this, PrimaryItem](UAnimMontage* Montage, bool bInterrupted)
-									{
-										if (!bInterrupted)
-										{
-											// Montage completed successfully
-											// Your completion logic here
-											UAnimMontage* EquipPrimaryMontage				= GetEquipMontage(*PrimaryItem);
-											if (EquipPrimaryMontage && PlayerAnimInstance)
-											{
-												PlayerAnimInstance->Montage_Play(EquipPrimaryMontage, 1.75f);
-												CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
-												// Bind a delegate to the montage end event if needed
-												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
-											}
-								
-										}
-									});
-									PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPalceholder1Montage);
-								}
-							}
-						});
-						PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipSecondaryMontage);
-					}
-				}
-				else
-				{
-					if (FoundItem->Equipped)
-					{
-						UAnimMontage* UnequipMontage = GetUnequipMontage(*FoundItem);
-						if (UnequipMontage && PlayerAnimInstance)
-						{
-							PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
-							// Bind a delegate to the montage end event if needed
-							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-						}
-						
-					}
-					else
-					{
-						UAnimMontage* EquipMontage = GetEquipMontage(*FoundItem);
-						if (EquipMontage && PlayerAnimInstance)
-						{
-							PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
-							// Bind a delegate to the montage end event if needed
-							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
-						}
-							
-					}
-					
-				}
-				break;
-			case EWeaponStateTypeEnum::Secondary:
-				if (bIsSecondaryItemEquipped)
-				{
-					UAnimMontage* UnequipPrimaryMontage				= GetUnequipMontage(*PrimaryItem);
-					if (UnequipPrimaryMontage && PlayerAnimInstance)
-					{
-						PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
-						CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
-						// Bind a delegate to the montage end event if needed
-						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-						FOnMontageEnded MontageEndedDelegate;
-						MontageEndedDelegate.BindLambda([this, Placeholder1Item, SecondaryItem](UAnimMontage* Montage, bool bInterrupted)
-						{
-							if (!bInterrupted)
-							{
-								// Montage completed successfully
-								// Your completion logic here
-								UAnimMontage* UnequipPalceholder1Montage		= GetUnequipMontage(*Placeholder1Item);
-								if (UnequipPalceholder1Montage && PlayerAnimInstance)
-								{
-									PlayerAnimInstance->Montage_Play(UnequipPalceholder1Montage, 1.75f);
-									CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
-									// Bind a delegate to the montage end event if needed
-									FOnMontageEnded MontageEndedDelegate;
-									MontageEndedDelegate.BindLambda([this, SecondaryItem](UAnimMontage* Montage, bool bInterrupted)
-									{
-										if (!bInterrupted)
-										{
-											// Montage completed successfully
-											// Your completion logic here
-											UAnimMontage* EquipSecondaryMontage				= GetEquipMontage(*SecondaryItem);
-											if (EquipSecondaryMontage && PlayerAnimInstance)
-											{
-												PlayerAnimInstance->Montage_Play(EquipSecondaryMontage, 1.75f);
-												CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
-												// Bind a delegate to the montage end event if needed
-												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
-											}
-										}
-									});
-									PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPalceholder1Montage);
-
-									
-									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-								}
-							}
-						});
-						PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPrimaryMontage);
-					}
-					
-					
-				}
-				else
-				{
-					if (FoundItem->Equipped)
-					{
-						UAnimMontage* UnequipMontage = GetUnequipMontage(*FoundItem);
-						if (UnequipMontage && PlayerAnimInstance)
-						{
-							PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
-							// Bind a delegate to the montage end event if needed
-							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-						}
-					}
-					else
-					{
-						UAnimMontage* EquipMontage = GetEquipMontage(*FoundItem);
-						if (EquipMontage && PlayerAnimInstance)
-						{
-							PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
-							// Bind a delegate to the montage end event if needed
-							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
-						}
-							
-					}
-				}
-				break;
-			case EWeaponStateTypeEnum::Placeholder1:
-				if (bIsPlaceholder1ItemEquipped)
-				{
-					UAnimMontage* UnequipPrimaryMontage				= GetUnequipMontage(*PrimaryItem);
-					if (UnequipPrimaryMontage && PlayerAnimInstance)
-					{
-						PlayerAnimInstance->Montage_Play(UnequipPrimaryMontage, 1.75f);
-						CurrentEquippingItemType = EWeaponStateTypeEnum::Primary;
-						// Bind a delegate to the montage end event if needed
-						PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-						FOnMontageEnded MontageEndedDelegate;
-						MontageEndedDelegate.BindLambda([this, SecondaryItem, Placeholder1Item](UAnimMontage* Montage, bool bInterrupted)
-						{
-							if (!bInterrupted)
-							{
-								// Montage completed successfully
-								// Your completion logic here
-								UAnimMontage* UnequipSecondaryMontage			= GetUnequipMontage(*SecondaryItem);
-								if (UnequipSecondaryMontage && PlayerAnimInstance)
-								{
-									PlayerAnimInstance->Montage_Play(UnequipSecondaryMontage, 1.75f);
-									CurrentEquippingItemType = EWeaponStateTypeEnum::Secondary;
-									// Bind a delegate to the montage end event if needed
-									PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-									FOnMontageEnded MontageEndedDelegate;
-									MontageEndedDelegate.BindLambda([this, Placeholder1Item](UAnimMontage* Montage, bool bInterrupted)
-									{
-										if (!bInterrupted)
-										{
-											// Montage completed successfully
-											// Your completion logic here
-											UAnimMontage* EquipPalceholder1Montage			= GetEquipMontage(*Placeholder1Item);
-											if (EquipPalceholder1Montage && PlayerAnimInstance)
-											{
-												PlayerAnimInstance->Montage_Play(EquipPalceholder1Montage, 1.75f);
-												CurrentEquippingItemType = EWeaponStateTypeEnum::Placeholder1;
-												// Bind a delegate to the montage end event if needed
-												PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
-											}
-										}
-									});
-									PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipSecondaryMontage);
-
-								}
-							}
-						});
-						PlayerAnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, UnequipPrimaryMontage);
-
-					}
-					
-					
-				}
-				else
-				{
-					if (FoundItem->Equipped)
-					{
-						UAnimMontage* UnequipMontage = GetUnequipMontage(*FoundItem);
-						if (UnequipMontage && PlayerAnimInstance)
-						{
-							PlayerAnimInstance->Montage_Play(UnequipMontage, 1.75f);
-							// Bind a delegate to the montage end event if needed
-							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnUnequipNotifyBegin);
-						}
-					}
-					else
-					{
-						UAnimMontage* EquipMontage = GetEquipMontage(*FoundItem);
-						if (EquipMontage && PlayerAnimInstance)
-						{
-							PlayerAnimInstance->Montage_Play(EquipMontage, 1.75f);
-							// Bind a delegate to the montage end event if needed
-							PlayerAnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &ASlashPlayerCharacter::OnEquipNotifyBegin);
-						}
-							
-					}
-				}
-				break;
-			}
-			
-		}
-		
-	}
+void ASlashPlayerCharacter::OnEquipNotifyBegin(
+    FName NotifyName,
+    const FBranchingPointNotifyPayload &BranchingPointNotifyPayload) {
+  EquipItem(CurrentEquippingItemType);
 }
 
-
-void ASlashPlayerCharacter::OnEquipNotifyBegin(FName NotifyName,
-                                               const FBranchingPointNotifyPayload& BranchingPointNotifyPayload)
-{
-	EquipItem(CurrentEquippingItemType);
+void ASlashPlayerCharacter::OnUnequipNotifyBegin(
+    FName NotifyName,
+    const FBranchingPointNotifyPayload &BranchingPointNotifyPayload) {
+  UnequipItem(CurrentEquippingItemType);
 }
 
-void ASlashPlayerCharacter::OnUnequipNotifyBegin(FName NotifyName,
-	const FBranchingPointNotifyPayload& BranchingPointNotifyPayload)
-{
-	UnequipItem(CurrentEquippingItemType);
+void ASlashPlayerCharacter::SetEquipStatus(EWeaponStateTypeEnum ItemType,
+                                           bool bEquipped) {
+  FEquippableStruct *FoundItem = EquippableSetup.Find(ItemType);
+  if (FoundItem) {
+    FoundItem->Equipped = bEquipped;
+
+    ASlashEquippableItemMaster *ActorInstance =
+        FoundItem->ActorRef
+            ? Cast<ASlashEquippableItemMaster>(FoundItem->ActorRef)
+            : nullptr;
+    if (ActorInstance) {
+      ActorInstance->TogglePhysics(!bEquipped);
+      ActorInstance->SetPivot(bEquipped);
+    }
+    switch (FoundItem->EquipHand) {
+    case EEquipHandEnum::HoldItem_Sword_r:
+      if (bEquipped) {
+        bRightHandClosed = ActorInstance->ClosedFist;
+      } else {
+        bRightHandClosed = false;
+      }
+
+      break;
+    case EEquipHandEnum::HoldItem_Bow_l:
+      if (bEquipped) {
+        bLeftHandClosed = ActorInstance->ClosedFist;
+      } else {
+        bLeftHandClosed = false;
+      }
+
+      break;
+    }
+  }
 }
 
+// ------------------------------------------- Equip/Unequip Input
+// -----------------------------------------------------
 
+// TODO : When Player Equip Primary weapon it attached to hand and in socket
+// weapon mesh still visible. Need to hide it . Later Add  equip animation
+// TODO : When Player Unequip Primary weapon it detached from hand and in socket
+// weapon mesh should visible. Need to hide it in hand. Later Add UnEquip
+// animation
+// TODO :
 
-void ASlashPlayerCharacter::SetEquipStatus(EWeaponStateTypeEnum ItemType, bool bEquipped)
-{
-	FEquippableStruct* FoundItem = EquippableSetup.Find(ItemType);
-	if (FoundItem)
-	{
-		FoundItem->Equipped = bEquipped;
-		
-		ASlashEquippableItemMaster* ActorInstance = FoundItem->ActorRef ? Cast<ASlashEquippableItemMaster>(FoundItem->ActorRef) : nullptr;
-		if (ActorInstance)
-		{
-			ActorInstance->TogglePhysics(!bEquipped);
-			ActorInstance->SetPivot(bEquipped);
-		}
-		switch (FoundItem->EquipHand)
-		{
-		case EEquipHandEnum::HoldItem_Sword_r:
-			if (bEquipped)
-			{
-				bRightHandClosed = ActorInstance->ClosedFist;
-			}
-			else
-			{
-				bRightHandClosed = false;
-			}
-			
-			break;
-		case EEquipHandEnum::HoldItem_Bow_l:
-			if (bEquipped)
-			{
-				bLeftHandClosed = ActorInstance->ClosedFist;
-			}
-			else
-			{
-				bLeftHandClosed = false;
-			}
-			
-			break;
-		}
-	}
-	
+void ASlashPlayerCharacter::PrimaryWeaponInput() {
+  if (!PlayerCombatComponent)
+    return;
+
+  if (PlayerCombatComponent->CurrentAttachedWeaponData.Num() > 0) {
+    auto *WeaponData =
+        PlayerCombatComponent->CurrentAttachedWeaponData.FindByPredicate(
+            [](const auto &Data) {
+              return Data.WeaponStateType == EWeaponStateTypeEnum::Primary;
+            });
+    if (WeaponData) {
+      PlayerCombatComponent->EquipWeapon(&WeaponData->EquippableData);
+    } else {
+      Soul_DebugHelper::DebugPrint("Weapon not in Holder");
+    }
+  }
 }
 
-#pragma endregion 
+void ASlashPlayerCharacter::SecondaryWeaponInput() {
+  if (!PlayerCombatComponent)
+    return;
 
-#pragma region UI
-
-void ASlashPlayerCharacter::SetupPlayerWidget()
-{
-	APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (!PlayerController) return;
-
-	// Create HUD Widget first
-	if (PlayerHUDWidgetClass)
-	{
-		PlayerHUDWidget = CreateWidget<USlashPlayerHUDWidget>(PlayerController, PlayerHUDWidgetClass);
-		if (PlayerHUDWidget)
-		{
-			PlayerHUDWidget->AddToViewport();
-		}
-	}
-
-	// Create Stat Widget and add it to HUD
-	if (PlayerStatWidgetClass && PlayerHUDWidget)
-	{
-		PlayerStatWidget = CreateWidget<USlashPlayerStatWidget>(PlayerController, PlayerStatWidgetClass);
-		if (PlayerStatWidget)
-		{
-			PlayerStatWidget->SetPlayerStatComponent(StatComponent);
-			PlayerHUDWidget->SetPlayerStatWidget(PlayerStatWidget);
-		}
-	}
+  if (PlayerCombatComponent->CurrentAttachedWeaponData.Num() > 0) {
+    Soul_DebugHelper::DebugPrint("Weapon Has in Holder");
+  } else {
+    Soul_DebugHelper::DebugPrint("Weapon not in Holder");
+  }
 }
 
-#pragma endregion 
-
-#pragma region Animation
-
-void ASlashPlayerCharacter::SetupPlayerAnimation()
-{
-	if (USkeletalMeshComponent* MeshComp = GetMesh())
-	{
-		if (UnarmedAnimLayerClass)
-		{
-			MeshComp->LinkAnimClassLayers(UnarmedAnimLayerClass);
-		}
-	}
+void ASlashPlayerCharacter::PlaceholderWeaponInput() {
+  if (!PlayerCombatComponent)
+    return;
+  if (PlayerCombatComponent->CurrentAttachedWeaponData.Num() > 0) {
+    Soul_DebugHelper::DebugPrint("Weapon Has in Holder");
+  } else {
+    Soul_DebugHelper::DebugPrint("Weapon not in Holder");
+  }
 }
 
-#pragma endregion
-
-
-bool ASlashPlayerCharacter::IsPlayerMoving()
-{
-	FVector LastInputVector = GetCharacterMovement()->GetLastInputVector();
-	if (LastInputVector.Size() > 0.001f)
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
+void ASlashPlayerCharacter::ToggleWeaponInput() {
+  if (!PlayerCombatComponent)
+    return;
 }
 
-void ASlashPlayerCharacter::SetCharacterState(ECharacterState NewState)
-{
-	CurrentState = NewState;
+// ---------------------------------------------------- UI
+// -------------------------------------------------------------
+
+void ASlashPlayerCharacter::SetupPlayerWidget() {
+  APlayerController *PlayerController =
+      Cast<APlayerController>(GetController());
+  if (!PlayerController)
+    return;
+
+  // Create HUD Widget first
+  if (PlayerHUDWidgetClass) {
+    PlayerHUDWidget = CreateWidget<USlashPlayerHUDWidget>(PlayerController,
+                                                          PlayerHUDWidgetClass);
+    if (PlayerHUDWidget) {
+      PlayerHUDWidget->AddToViewport();
+    }
+  }
+
+  // Create Stat Widget and add it to HUD
+  if (PlayerStatWidgetClass && PlayerHUDWidget) {
+    PlayerStatWidget = CreateWidget<USlashPlayerStatWidget>(
+        PlayerController, PlayerStatWidgetClass);
+    if (PlayerStatWidget) {
+      PlayerStatWidget->SetPlayerStatComponent(StatComponent);
+      PlayerHUDWidget->SetPlayerStatWidget(PlayerStatWidget);
+    }
+  }
 }
 
-void ASlashPlayerCharacter::FindOutGroundDistance()
-{
-	// Get the world instance
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-	
-	FHitResult HitResult;
-	FVector StartLocation = GetActorLocation() + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()); // Or any desired start point
-	FVector EndLocation = GetActorLocation() - FVector(0.0f, 0.0f, 1000.0f); // Example: 1000 units downward
-	float SphereRadius = GetCapsuleComponent()->GetScaledCapsuleRadius();
-	ECollisionChannel TraceChannel = ECC_Visibility; // Or your custom channel
+// ------------------------------------------------ Animations
+// ---------------------------------------------------------
 
-	FCollisionQueryParams QueryParams;
-	QueryParams.AddIgnoredActor(this); // Ignore the actor performing the trace
-	QueryParams.bTraceComplex = true; // Trace against complex collision if needed
-
-	bool bHit = GetWorld()->SweepSingleByChannel(
-		HitResult,
-		StartLocation,
-		EndLocation,
-		FQuat::Identity, // For sphere traces, rotation is usually identity
-		TraceChannel,
-		FCollisionShape::MakeSphere(SphereRadius),
-		QueryParams
-	);
-
-	if (bHit)
-	{
-		if (PlayerAnimInstance)
-		{
-			PlayerAnimInstance->GroundDistance = HitResult.Distance;
-		}
-	}
-
-	if (false)
-	{
-		// Optional: Draw debug sphere
-		DrawDebugSphere(
-			GetWorld(),
-			StartLocation,
-			SphereRadius,
-			12, // Number of segments
-			FColor::Red,
-			false, // Persistent
-			5.f, // Duration
-			0, // Depth priority
-			1.f // Thickness
-		);
-		DrawDebugLine(
-			GetWorld(),
-			StartLocation,
-			EndLocation,
-			FColor::Green,
-			false,
-			5.f,
-			0,
-			1.f
-		);
-	}
-
-	
+void ASlashPlayerCharacter::SetupPlayerAnimation() {
+  if (USkeletalMeshComponent *MeshComp = GetMesh()) {
+    if (UnarmedAnimLayerClass) {
+      MeshComp->LinkAnimClassLayers(UnarmedAnimLayerClass);
+    }
+  }
 }
 
-void ASlashPlayerCharacter::GetActionKeyName(const UInputAction* InputAction)
-{
-	if (!InputAction)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("InputAction is null"));
-		return;
-	}
-	ASlashPlayerController* PC = Cast<ASlashPlayerController>(GetController());
-	
-	if (ULocalPlayer* LocalPlayer = GetWorld()->GetFirstPlayerController()->GetLocalPlayer())
-	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
-		{
-			TArray<FKey> MappedKeys;
-			MappedKeys = Subsystem->QueryKeysMappedToAction(InputAction);
+// -------------------------------------------- Helper Functions
+// -------------------------------------------------------
 
-			// Log all keys mapped to this action
-			for (const FKey& Key : MappedKeys)
-			{
-				if (PC->IsInputKeyDown(Key))
-				{
-					MovePressedKey = Key;
-					//UE_LOG(LogTemp, Warning, TEXT("%s"), *Key.GetDisplayName().ToString());
-				}
-				
-
-			}
-		}
-	}
+bool ASlashPlayerCharacter::IsPlayerMoving() {
+  FVector LastInputVector = GetCharacterMovement()->GetLastInputVector();
+  if (LastInputVector.Size() > 0.001f) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
-void ASlashPlayerCharacter::ProcessInteraction()
-{
-	if (GetWorld() && IsValid(GetMesh()))
-	{
-		FVector TraceStart = GetMesh()->GetComponentLocation() + FVector(0.0f, 0.0f, 50.0f);
-		FVector TraceEnd = TraceStart;
-
-		TArray<FHitResult> OutHitResult;
-		const TArray<AActor*> ActorsToIgnore = { this };
-		TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypesArray;
-		ObjectTypesArray.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_WorldStatic));
-		
-		bool bHitDetect = UKismetSystemLibrary::SphereTraceMultiForObjects(
-				GetWorld(),
-				TraceStart,
-				TraceEnd,
-				160.0f, // Radius
-				ObjectTypesArray,
-				false, // bTraceComplex
-				ActorsToIgnore,
-				EDrawDebugTrace::None,
-				OutHitResult,
-				true, // bIgnoreSelf
-				FLinearColor::White,
-				FLinearColor::Green,
-				5.0f // Draw Time
-			);
-		
-
-		if (bHitDetect)
-		{
-			for (FHitResult HitResult : OutHitResult)
-			{
-				ASlashEquippableItemMaster* HitActor = Cast<ASlashEquippableItemMaster>(HitResult.GetActor());
-				if (HitActor)
-				{
-					if (HitActor->Implements<UInteractInterface>())
-					{
-						IInteractInterface::Execute_Interact(HitActor, this);
-					}
-				}
-			}
-		}
-	}
-	
+void ASlashPlayerCharacter::SetCharacterState(ECharacterState NewState) {
+  CurrentState = NewState;
 }
 
+void ASlashPlayerCharacter::FindOutGroundDistance() {
+  // Get the world instance
+  UWorld *World = GetWorld();
+  if (!World) {
+    return;
+  }
 
-#pragma region Notify Handlers
+  FHitResult HitResult;
+  FVector StartLocation =
+      GetActorLocation() +
+      FVector(0.0f, 0.0f,
+              GetCapsuleComponent()
+                  ->GetScaledCapsuleHalfHeight()); // Or any desired start point
+  FVector EndLocation =
+      GetActorLocation() -
+      FVector(0.0f, 0.0f, 1000.0f); // Example: 1000 units downward
+  float SphereRadius = GetCapsuleComponent()->GetScaledCapsuleRadius();
+  ECollisionChannel TraceChannel = ECC_Visibility; // Or your custom channel
 
-void ASlashPlayerCharacter::HandleNotify_CameraShake()
-{
-	if (SprintCameraShakeClass)
-	{
-		FVector ShakeLocation = GetActorLocation(); // Or any desired location
-		float InnerRadius = 0.0f;
-		float OuterRadius = 1000.0f;
-		float Falloff = 1.0f;
+  FCollisionQueryParams QueryParams;
+  QueryParams.AddIgnoredActor(this); // Ignore the actor performing the trace
+  QueryParams.bTraceComplex = true; // Trace against complex collision if needed
 
-		UGameplayStatics::PlayWorldCameraShake(this, SprintCameraShakeClass, ShakeLocation, InnerRadius, OuterRadius, Falloff);
-	}
+  bool bHit = GetWorld()->SweepSingleByChannel(
+      HitResult, StartLocation, EndLocation,
+      FQuat::Identity, // For sphere traces, rotation is usually identity
+      TraceChannel, FCollisionShape::MakeSphere(SphereRadius), QueryParams);
+
+  if (bHit) {
+    if (PlayerAnimInstance) {
+      PlayerAnimInstance->GroundDistance = HitResult.Distance;
+    }
+  }
+
+  if (false) {
+    // Optional: Draw debug sphere
+    DrawDebugSphere(GetWorld(), StartLocation, SphereRadius,
+                    12, // Number of segments
+                    FColor::Red,
+                    false, // Persistent
+                    5.f,   // Duration
+                    0,     // Depth priority
+                    1.f    // Thickness
+    );
+    DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor::Green, false,
+                  5.f, 0, 1.f);
+  }
 }
 
-void ASlashPlayerCharacter::HandleNotify_FallLand()
-{
-	if (FallLandCameraShakeClass)
-	{
-		FVector ShakeLocation = GetActorLocation(); // Or any desired location
-		float InnerRadius = 0.0f;
-		float OuterRadius = 1000.0f;
-		float Falloff = 1.0f;
+void ASlashPlayerCharacter::GetActionKeyName(const UInputAction *InputAction) {
+  if (!InputAction) {
+    UE_LOG(LogTemp, Warning, TEXT("InputAction is null"));
+    return;
+  }
+  ASlashPlayerController *PC = Cast<ASlashPlayerController>(GetController());
 
-		UGameplayStatics::PlayWorldCameraShake(this, FallLandCameraShakeClass, ShakeLocation, InnerRadius, OuterRadius, Falloff);
-	}
+  if (ULocalPlayer *LocalPlayer =
+          GetWorld()->GetFirstPlayerController()->GetLocalPlayer()) {
+    if (UEnhancedInputLocalPlayerSubsystem *Subsystem =
+            ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
+                LocalPlayer)) {
+      TArray<FKey> MappedKeys;
+      MappedKeys = Subsystem->QueryKeysMappedToAction(InputAction);
+
+      // Log all keys mapped to this action
+      for (const FKey &Key : MappedKeys) {
+        if (PC->IsInputKeyDown(Key)) {
+          MovePressedKey = Key;
+          // UE_LOG(LogTemp, Warning, TEXT("%s"),
+          // *Key.GetDisplayName().ToString());
+        }
+      }
+    }
+  }
 }
 
-#pragma endregion 
+void ASlashPlayerCharacter::ProcessInteraction() {
+  if (GetWorld() && IsValid(GetMesh())) {
+    FVector TraceStart =
+        GetMesh()->GetComponentLocation() + FVector(0.0f, 0.0f, 50.0f);
+    FVector TraceEnd = TraceStart;
+
+    TArray<FHitResult> OutHitResult;
+    const TArray<AActor *> ActorsToIgnore = {this};
+    TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypesArray;
+    ObjectTypesArray.Add(
+        UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_WorldStatic));
+
+    bool bHitDetect = UKismetSystemLibrary::SphereTraceMultiForObjects(
+        GetWorld(), TraceStart, TraceEnd,
+        160.0f, // Radius
+        ObjectTypesArray,
+        false, // bTraceComplex
+        ActorsToIgnore, EDrawDebugTrace::None, OutHitResult,
+        true, // bIgnoreSelf
+        FLinearColor::White, FLinearColor::Green,
+        5.0f // Draw Time
+    );
+
+    if (bHitDetect) {
+      for (FHitResult HitResult : OutHitResult) {
+        ASlashEquippableItemMaster *HitActor =
+            Cast<ASlashEquippableItemMaster>(HitResult.GetActor());
+        if (HitActor) {
+          if (HitActor->Implements<UInteractInterface>()) {
+            IInteractInterface::Execute_Interact(HitActor, this);
+          }
+        }
+      }
+    }
+  }
+}
+
+// ------------------------------------------- Notify Handlers
+// ---------------------------------------------------------
+
+void ASlashPlayerCharacter::HandleNotify_CameraShake() {
+  if (SprintCameraShakeClass) {
+    FVector ShakeLocation = GetActorLocation(); // Or any desired location
+    float InnerRadius = 0.0f;
+    float OuterRadius = 1000.0f;
+    float Falloff = 1.0f;
+
+    UGameplayStatics::PlayWorldCameraShake(this, SprintCameraShakeClass,
+                                           ShakeLocation, InnerRadius,
+                                           OuterRadius, Falloff);
+  }
+}
+
+void ASlashPlayerCharacter::HandleNotify_FallLand() {
+  if (FallLandCameraShakeClass) {
+    FVector ShakeLocation = GetActorLocation(); // Or any desired location
+    float InnerRadius = 0.0f;
+    float OuterRadius = 1000.0f;
+    float Falloff = 1.0f;
+
+    UGameplayStatics::PlayWorldCameraShake(this, FallLandCameraShakeClass,
+                                           ShakeLocation, InnerRadius,
+                                           OuterRadius, Falloff);
+  }
+}

@@ -285,8 +285,19 @@ public:
 	void EndRoll();
 	void ToggleCrawlMode();
 	void CheckIfCrawlMode();
+	
+#pragma region Equip/UnEquip InputAction
+	void PrimaryWeaponInput();
+	void SecondaryWeaponInput();
+	void PlaceholderWeaponInput();
+	void ToggleWeaponInput();
+	
+#pragma endregion
 
 protected:
+	
+ 
+	
 	// Equip/Unequip
 	UAnimMontage* GetEquipMontage(FEquippableStruct EquippableStruct);
 	UAnimMontage* GetUnequipMontage(FEquippableStruct EquippableStruct);
